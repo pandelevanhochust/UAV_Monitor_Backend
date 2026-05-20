@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>UavSystem.IngestionService.WebApi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Logging & API -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <!-- Redis (device validation — NEVER PostgreSQL) -->
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <!-- ClickHouse (log writes) -->
+    <PackageReference Include="ClickHouse.Client" Version="7.*" />
+    <!-- RabbitMQ (alert publishing — raw client, NO MassTransit) -->
+    <PackageReference Include="RabbitMQ.Client" Version="6.*" />
+    <!-- gRPC client (calling DeviceService for state transitions) -->
+    <PackageReference Include="Grpc.Net.Client" Version="2.*" />
+    <PackageReference Include="Google.Protobuf" Version="3.*" />
+    <!-- BCrypt for API key verification -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\UavSystem.Shared.Contracts\UavSystem.Shared.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\UavSystem.Shared.Infrastructure\UavSystem.Shared.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

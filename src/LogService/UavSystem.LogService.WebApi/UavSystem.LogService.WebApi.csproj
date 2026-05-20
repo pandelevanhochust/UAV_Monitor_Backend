@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>UavSystem.LogService.WebApi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <!-- gRPC client (calling UserService for monitor device scoping) -->
+    <PackageReference Include="Grpc.Net.Client" Version="2.*" />
+    <PackageReference Include="Google.Protobuf" Version="3.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UavSystem.LogService.Infrastructure\UavSystem.LogService.Infrastructure.csproj" />
+    <ProjectReference Include="..\UavSystem.LogService.Application\UavSystem.LogService.Application.csproj" />
+    <ProjectReference Include="..\..\Shared\UavSystem.Shared.Contracts\UavSystem.Shared.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

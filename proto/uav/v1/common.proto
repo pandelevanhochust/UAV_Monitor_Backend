@@ -1,0 +1,10 @@
+// ==========================================================================
+// common.proto — Shared Protobuf message definitions
+// Placeholder for future cross-service message types (e.g., Pagination,
+// ErrorDetail, GeoCoordinate). All services importing this file will
+// automatically receive new shared types upon recompilation.
+// ==========================================================================
+
+syntax = "proto3";
+package uav.v1;
+option csharp_namespace = "UavSystem.Shared.Contracts.Grpc";

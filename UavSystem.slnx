@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/AlertService/">
+    <Project Path="src/AlertService/UavSystem.AlertService.WebApi/UavSystem.AlertService.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/DeviceService/">
+    <Project Path="src/DeviceService/UavSystem.DeviceService.Application/UavSystem.DeviceService.Application.csproj" />
+    <Project Path="src/DeviceService/UavSystem.DeviceService.Domain/UavSystem.DeviceService.Domain.csproj" />
+    <Project Path="src/DeviceService/UavSystem.DeviceService.Infrastructure/UavSystem.DeviceService.Infrastructure.csproj" />
+    <Project Path="src/DeviceService/UavSystem.DeviceService.WebApi/UavSystem.DeviceService.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/IngestionService/">
+    <Project Path="src/IngestionService/UavSystem.IngestionService.WebApi/UavSystem.IngestionService.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/LogService/">
+    <Project Path="src/LogService/UavSystem.LogService.Application/UavSystem.LogService.Application.csproj" />
+    <Project Path="src/LogService/UavSystem.LogService.Infrastructure/UavSystem.LogService.Infrastructure.csproj" />
+    <Project Path="src/LogService/UavSystem.LogService.WebApi/UavSystem.LogService.WebApi.csproj" />
+  </Folder>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/UavSystem.Shared.Contracts/UavSystem.Shared.Contracts.csproj" />
+    <Project Path="src/Shared/UavSystem.Shared.Infrastructure/UavSystem.Shared.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/src/UserService/">
+    <Project Path="src/UserService/UavSystem.UserService.Application/UavSystem.UserService.Application.csproj" />
+    <Project Path="src/UserService/UavSystem.UserService.Domain/UavSystem.UserService.Domain.csproj" />
+    <Project Path="src/UserService/UavSystem.UserService.Infrastructure/UavSystem.UserService.Infrastructure.csproj" />
+    <Project Path="src/UserService/UavSystem.UserService.WebApi/UavSystem.UserService.WebApi.csproj" />
+  </Folder>
+</Solution>

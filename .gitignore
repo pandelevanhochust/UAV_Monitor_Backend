@@ -1,0 +1,21 @@
+# ── Environment Secrets ──────────────────────────────────────────────────────
+.env
+
+# ── .NET Build Artifacts ─────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+
+# ── IDE Configuration ────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.sln.DotSettings.user
+
+# ── OS Generated ─────────────────────────────────────────────────────────────
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# ── Docker Overrides (optional local-only compose) ───────────────────────────
+docker-compose.override.yml

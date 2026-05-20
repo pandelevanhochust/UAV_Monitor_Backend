@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>UavSystem.Shared.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Cross-Cutting Infrastructure Dependencies -->
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <PackageReference Include="RabbitMQ.Client" Version="6.*" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.*" />
+  </ItemGroup>
+
+  <!-- Project Reference: Shared event/enum types for serialization in messaging base classes -->
+  <ItemGroup>
+    <ProjectReference Include="..\UavSystem.Shared.Contracts\UavSystem.Shared.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

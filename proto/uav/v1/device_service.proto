@@ -1,0 +1,14 @@
+syntax = "proto3";
+package uav.v1;
+option csharp_namespace = "UavSystem.Shared.Contracts.Grpc";
+import "google/protobuf/timestamp.proto";
+
+service InternalDeviceService {
+  rpc UpdateDeviceStatus (UpdateDeviceStatusRequest) returns (UpdateDeviceStatusResponse);
+  rpc ReportStateChange (StateChangeRequest) returns (StateChangeResponse);
+}
+
+message UpdateDeviceStatusRequest { int64 device_id = 1; string new_status = 2; google.protobuf.Timestamp timestamp = 3; }
+message UpdateDeviceStatusResponse { bool success = 1; }
+message StateChangeRequest { int64 device_id = 1; string original_status = 2; string updated_status = 3; google.protobuf.Timestamp occurrence_time = 4; string error_details = 5; }
+message StateChangeResponse { bool database_committed = 1; bool event_broadcasted = 2; }

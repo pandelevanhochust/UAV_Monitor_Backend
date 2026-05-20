@@ -1,0 +1,13 @@
+syntax = "proto3";
+package uav.v1;
+option csharp_namespace = "UavSystem.Shared.Contracts.Grpc";
+
+service UserService {
+  rpc ValidateToken (ValidateTokenRequest) returns (ValidateTokenResponse);
+  rpc GetUserMonitoredDevices (GetDevicesRequest) returns (GetDevicesResponse);
+}
+
+message ValidateTokenRequest { string token = 1; }
+message ValidateTokenResponse { string user_id = 1; string role = 2; bool is_valid = 3; }
+message GetDevicesRequest { string user_id = 1; }
+message GetDevicesResponse { repeated int64 device_ids = 1; }

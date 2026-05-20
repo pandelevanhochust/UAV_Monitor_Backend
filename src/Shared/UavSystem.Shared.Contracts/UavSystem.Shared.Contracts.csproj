@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>UavSystem.Shared.Contracts</RootNamespace>
+  </PropertyGroup>
+
+  <!-- gRPC Code Generation Tooling -->
+  <ItemGroup>
+    <PackageReference Include="Grpc.AspNetCore" Version="2.*" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.*" />
+    <PackageReference Include="Google.Protobuf" Version="3.*" />
+    <PackageReference Include="Grpc.Tools" Version="2.*" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!-- Protobuf Definitions — Single Source of Truth from /proto/ directory -->
+  <ItemGroup>
+    <Protobuf Include="..\..\..\proto\uav\v1\user_service.proto"
+              GrpcServices="Both"
+              Link="Protos\user_service.proto" />
+    <Protobuf Include="..\..\..\proto\uav\v1\device_service.proto"
+              GrpcServices="Both"
+              Link="Protos\device_service.proto" />
+    <Protobuf Include="..\..\..\proto\uav\v1\common.proto"
+              GrpcServices="Both"
+              Link="Protos\common.proto" />
+  </ItemGroup>
+
+</Project>

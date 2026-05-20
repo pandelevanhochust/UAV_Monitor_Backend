@@ -1,0 +1,103 @@
+##############################################################################
+# Kong Gateway — Declarative Configuration (DB-less Mode)
+# UAV Drone Detection System — Route & Plugin Definitions
+#
+# ForwardAuth Strategy:
+#   Public endpoints (login, edge telemetry) bypass JWT validation entirely.
+#   Protected endpoints trigger a synchronous gRPC call over HTTP/2 to
+#   UserService on port 9080, invoking the ValidateToken RPC.
+#   On success, X-User-ID and X-User-Role headers are injected upstream.
+##############################################################################
+
+_format_version: "3.0"
+_transform: true
+
+services:
+
+  # ==========================================================================
+  # USER SERVICE BOUNDARY
+  # ==========================================================================
+  - name: user-service
+    url: http://userservice:8080
+    routes:
+      # --- Public: Login endpoint (no auth required) ---
+      - name: public-auth-login
+        paths:
+          - /api/v1/auth/login
+        strip_path: false
+        methods:
+          - POST
+
+      # --- Protected: Admin user management ---
+      - name: protected-admin-users
+        paths:
+          - /api/v1/admin/users
+        strip_path: false
+        plugins:
+          - name: forward-auth
+            config:
+              url: grpc://userservice:9080
+              auth_response_headers:
+                - X-User-ID
+                - X-User-Role
+
+  # ==========================================================================
+  # DEVICE SERVICE BOUNDARY
+  # ==========================================================================
+  - name: device-service
+    url: http://deviceservice:8081
+    plugins:
+      - name: forward-auth
+        config:
+          url: grpc://userservice:9080
+          auth_response_headers:
+            - X-User-ID
+            - X-User-Role
+    routes:
+      - name: device-management-routes
+        paths:
+          - /api/v1/devices
+          - /api/v1/admin/devices
+        strip_path: false
+
+  # ==========================================================================
+  # LOG SERVICE BOUNDARY
+  # ==========================================================================
+  - name: log-service
+    url: http://logservice:8083
+    plugins:
+      - name: forward-auth
+        config:
+          url: grpc://userservice:9080
+          auth_response_headers:
+            - X-User-ID
+            - X-User-Role
+    routes:
+      - name: analytical-log-routes
+        paths:
+          - /api/v1/logs
+        strip_path: false
+
+  # ==========================================================================
+  # INGESTION SERVICE BOUNDARY (EDGE TELEMETRY — NO JWT)
+  # ==========================================================================
+  - name: ingestion-service
+    url: http://ingestionservice:8082
+    routes:
+      - name: public-edge-telemetry
+        paths:
+          - /api/v1/telemetry/log
+        strip_path: false
+        methods:
+          - POST
+
+  # ==========================================================================
+  # ALERT SERVICE BOUNDARY (WEBSOCKETS — SIGNALR HUB)
+  # ==========================================================================
+  - name: alert-service
+    url: http://alertservice:8084
+    routes:
+      - name: alert-websocket-hub
+        paths:
+          - /ws/alerts
+        strip_path: false

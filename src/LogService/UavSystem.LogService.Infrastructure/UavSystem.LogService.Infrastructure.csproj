@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>UavSystem.LogService.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ClickHouse (log reads — NEVER PostgreSQL, Zero Cross-Over) -->
+    <PackageReference Include="ClickHouse.Client" Version="7.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\UavSystem.LogService.Application\UavSystem.LogService.Application.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+@UavSystem.IngestionService.WebApi_HostAddress = http://localhost:5051
+
+GET {{UavSystem.IngestionService.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

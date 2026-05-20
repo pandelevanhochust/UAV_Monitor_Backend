@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>UavSystem.AlertService.WebApi</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Logging & API -->
+    <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="5.*" />
+    <!-- SignalR (included in ASP.NET Core, but explicit for clarity) -->
+    <!-- Redis (reverse monitor→device lookup) -->
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <!-- RabbitMQ (raw client — NO MassTransit) -->
+    <PackageReference Include="RabbitMQ.Client" Version="6.*" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Shared\UavSystem.Shared.Contracts\UavSystem.Shared.Contracts.csproj" />
+    <ProjectReference Include="..\..\Shared\UavSystem.Shared.Infrastructure\UavSystem.Shared.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
