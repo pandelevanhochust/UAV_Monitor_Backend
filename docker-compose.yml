@@ -20,7 +20,7 @@ services:
   # API GATEWAY — Kong (DB-less / Declarative Mode)
   # ==========================================================================
   kong:
-    image: kong:3.9-alpine
+    image: kong:3.9
     container_name: uav-kong
     restart: unless-stopped
     environment:
@@ -87,7 +87,7 @@ services:
 
   # ---------- ClickHouse — Columnar Log Storage ----------
   clickhouse:
-    image: clickhouse/clickhouse-server:24-alpine
+    image: clickhouse/clickhouse-server:24
     container_name: uav-clickhouse
     restart: unless-stopped
     environment:
