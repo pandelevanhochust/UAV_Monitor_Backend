@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using RabbitMQ.Client;
+using Scalar.AspNetCore;
 using Serilog;
 using StackExchange.Redis;
 using UavSystem.DeviceService.Application.Interfaces;
@@ -77,15 +78,20 @@ builder.Services.AddHostedService<RedisHeartbeatWatcherService>();
 // ── REST API ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 // ── Middleware Pipeline ──────────────────────────────────────────────────────
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("UAV Detection System — Device Service")
+               .WithTheme(ScalarTheme.DeepSpace)
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.MapControllers();

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using RabbitMQ.Client;
+using Scalar.AspNetCore;
 using Serilog;
 using StackExchange.Redis;
 using UavSystem.AlertService.WebApi.Consumers;
@@ -53,14 +54,19 @@ builder.Services.AddHostedService<StatusChangeConsumer>();
 // ── REST API (health check / Swagger) ────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("UAV Detection System — Alert Service")
+               .WithTheme(ScalarTheme.DeepSpace)
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 // ── Map SignalR Hub (matches Kong path: /ws/alerts) ──────────────────────────

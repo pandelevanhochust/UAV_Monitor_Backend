@@ -10,6 +10,7 @@ using UavSystem.UserService.Infrastructure.Persistence;
 using UavSystem.UserService.Infrastructure.Persistence.Repositories;
 using UavSystem.UserService.WebApi.GrpcServices;
 using UavSystem.UserService.WebApi.Middleware;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,7 +63,7 @@ builder.Services.AddGrpc();
 // ── REST API ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
@@ -71,8 +72,13 @@ app.UseMiddleware<ExceptionHandlerMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("UAV Detection System API Control Plane")
+               .WithTheme(ScalarTheme.DeepSpace) // Giao diện tối hiện đại, rất hợp với đồ án quân sự/UAV
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient); // Tự sinh code ví dụ bằng C#
+    });
 }
 
 app.MapControllers();

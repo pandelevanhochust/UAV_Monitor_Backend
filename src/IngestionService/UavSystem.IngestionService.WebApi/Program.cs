@@ -3,6 +3,7 @@ using ClickHouse.Client.ADO;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using RabbitMQ.Client;
+using Scalar.AspNetCore;
 using Serilog;
 using StackExchange.Redis;
 using UavSystem.IngestionService.WebApi.Pipeline;
@@ -75,14 +76,19 @@ builder.Services.AddHostedService<IngestionWorker>();
 // ── REST API ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("UAV Detection System — Ingestion Service")
+               .WithTheme(ScalarTheme.DeepSpace)
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.MapControllers();

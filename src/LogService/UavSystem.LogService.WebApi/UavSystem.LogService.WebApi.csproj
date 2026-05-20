@@ -10,7 +10,8 @@
   <ItemGroup>
     <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.*" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.0.*" />
     <!-- gRPC client (calling UserService for monitor device scoping) -->
     <PackageReference Include="Grpc.Net.Client" Version="2.*" />
     <PackageReference Include="Google.Protobuf" Version="3.*" />

@@ -11,7 +11,8 @@
     <!-- Logging & API -->
     <PackageReference Include="Serilog.AspNetCore" Version="8.*" />
     <PackageReference Include="Serilog.Sinks.Console" Version="5.*" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.0.*" />
     <!-- Redis (device validation — NEVER PostgreSQL) -->
     <PackageReference Include="StackExchange.Redis" Version="2.*" />
     <!-- ClickHouse (log writes) -->

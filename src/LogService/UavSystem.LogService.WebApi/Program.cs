@@ -1,6 +1,7 @@
 using ClickHouse.Client.ADO;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Scalar.AspNetCore;
 using Serilog;
 using UavSystem.LogService.Application.Interfaces;
 using UavSystem.LogService.Infrastructure.ClickHouse;
@@ -45,14 +46,19 @@ builder.Services.AddMediatR(cfg =>
 // ── REST API ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.MapOpenApi();
+    app.MapScalarApiReference(options =>
+    {
+        options.WithTitle("UAV Detection System — Log Service")
+               .WithTheme(ScalarTheme.DeepSpace)
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient);
+    });
 }
 
 app.MapControllers();
