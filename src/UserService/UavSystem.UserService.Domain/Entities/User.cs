@@ -10,26 +10,26 @@ namespace UavSystem.UserService.Domain.Entities;
 public sealed class User
 {
     public Guid Id { get; init; } = Guid.NewGuid();
-    public string Name { get; private set; } = null!;
+    public string Username { get; private set; } = null!;
     public string Email { get; private set; } = null!;
     public string PasswordHash { get; private set; } = null!;
     public UserRole Role { get; private set; } = UserRole.Monitor;
-    public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; init; } = DateTime.UtcNow;
 
     // Required by EF Core for materialization — private to enforce invariants
     private User() { }
 
-    public User(string name, string email, string passwordHash, UserRole role)
+    public User(string username, string email, string passwordHash, UserRole role)
     {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Username = username ?? throw new ArgumentNullException(nameof(username));
         Email = email ?? throw new ArgumentNullException(nameof(email));
         PasswordHash = passwordHash ?? throw new ArgumentNullException(nameof(passwordHash));
         Role = role;
     }
 
-    public void UpdateName(string name)
+    public void UpdateUsername(string username)
     {
-        Name = name ?? throw new ArgumentNullException(nameof(name));
+        Username = username ?? throw new ArgumentNullException(nameof(username));
     }
 
     public void UpdatePasswordHash(string passwordHash)

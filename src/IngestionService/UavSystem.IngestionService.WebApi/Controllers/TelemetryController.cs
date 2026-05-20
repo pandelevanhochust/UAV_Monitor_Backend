@@ -47,7 +47,7 @@ public sealed class TelemetryController : ControllerBase
 
         if (payload.DeviceId <= 0)
         {
-            return BadRequest(new { error = "Invalid device_id." });
+            return BadRequest(new { error = $"Invalid device_id. {payload.DeviceId}" });
         }
 
         // ── API Key Verification via Redis Hash ──────────────────────────

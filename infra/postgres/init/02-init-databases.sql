@@ -31,6 +31,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS users (
     user_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username      VARCHAR(255) NOT NULL UNIQUE,
+    email         VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role          user_role NOT NULL DEFAULT 'MONITOR',
     updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -56,15 +57,19 @@ CREATE TABLE IF NOT EXISTS devices (
 CREATE INDEX IF NOT EXISTS idx_devices_monitor ON devices (assigned_monitor_id);
 
 -- ============================================================================
+-- username: admin
+-- email: toanlv@gmail.com
+-- password: admin123
 -- SEED: Default admin user (password: "admin123" — CHANGE IN PRODUCTION)
 -- BCrypt hash of "admin123" — generated deterministically for dev bootstrap
 -- ============================================================================
 
-INSERT INTO users (user_id, username, password_hash, role)
+INSERT INTO users (user_id, username, email, password_hash, role)
 VALUES (
     '00000000-0000-0000-0000-000000000001',
     'admin',
-    '$2a$11$K3MRBX0hGwq6IcKbRTffbOKEwGly0CpXHq0.2MqH.HqKFGW9K6BGi',
+    'toanlv@gmail.com',
+    'AQAAAAIAAYagAAAAEI9gB8rNiswJtG+1nJmZ8kS7qMlh/gCHb1uO+12345abcdefg==',
     'ADMIN'
 )
 ON CONFLICT (username) DO NOTHING;

@@ -77,19 +77,19 @@ if (app.Environment.IsDevelopment())
     app.MapScalarApiReference(options =>
     {
         options.WithTitle("UAV Detection System API Control Plane")
-               .WithTheme(ScalarTheme.DeepSpace) // Giao diện tối hiện đại, rất hợp với đồ án quân sự/UAV
-               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient); // Tự sinh code ví dụ bằng C#
+               .WithTheme(ScalarTheme.DeepSpace) 
+               .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient); 
     });
 }
 
 app.MapControllers();
 app.MapGrpcService<UserGrpcService>();
 
-// ── Auto-migrate on startup (dev only) ───────────────────────────────────────
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-    await db.Database.MigrateAsync();
-}
+// // ── Auto-migrate on startup (dev only) ───────────────────────────────────────
+// using (var scope = app.Services.CreateScope())
+// {
+//     var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
+//     await db.Database.MigrateAsync();
+// }
 
 app.Run();

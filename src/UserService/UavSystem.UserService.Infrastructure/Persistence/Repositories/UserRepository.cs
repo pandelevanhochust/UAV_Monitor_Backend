@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+    using Microsoft.EntityFrameworkCore;
 using UavSystem.UserService.Domain.Entities;
 using UavSystem.UserService.Domain.Interfaces;
 
@@ -27,7 +27,7 @@ public sealed class UserRepository : IUserRepository
     public async Task<IEnumerable<User>> GetAllAsync(CancellationToken ct = default)
     {
         return await _context.Users
-            .OrderByDescending(u => u.CreatedAt)
+            .OrderByDescending(u => u.UpdatedAt)
             .ToListAsync(ct);
     }
 

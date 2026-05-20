@@ -52,8 +52,8 @@ public sealed class AdminUsersController : ControllerBase
             return Forbid();
 
         var users = await _userRepository.GetAllAsync(ct);
-        var dtos = users.Select(u =>
-            new UserDto(u.Id, u.Name, u.Email, u.Role.ToString(), u.CreatedAt));
+        var dtos = users.Select(u => 
+            new UserDto(u.Id, u.Username, u.Email, u.Role.ToString(), u.UpdatedAt));
 
         return Ok(dtos);
     }

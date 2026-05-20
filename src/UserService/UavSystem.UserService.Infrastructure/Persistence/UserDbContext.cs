@@ -20,11 +20,11 @@ public sealed class UserDbContext : DbContext
 
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id)
-                  .HasColumnName("id")
+                  .HasColumnName("user_id")
                   .HasDefaultValueSql("gen_random_uuid()");
 
-            entity.Property(e => e.Name)
-                  .HasColumnName("name")
+            entity.Property(e => e.Username)
+                  .HasColumnName("username")
                   .HasMaxLength(100)
                   .IsRequired();
 
@@ -47,8 +47,8 @@ public sealed class UserDbContext : DbContext
                   .HasDefaultValue(UserRole.Monitor)
                   .HasConversion<string>();
 
-            entity.Property(e => e.CreatedAt)
-                  .HasColumnName("created_at")
+            entity.Property(e => e.UpdatedAt)
+                  .HasColumnName("updated_at")
                   .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
     }

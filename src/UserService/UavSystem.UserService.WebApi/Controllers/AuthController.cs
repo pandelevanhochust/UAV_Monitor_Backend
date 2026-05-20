@@ -20,6 +20,16 @@ public sealed class AuthController : ControllerBase
     /// POST /api/v1/auth/login — Public endpoint (no JWT required).
     /// Authenticates user credentials and returns a signed JWT.
     /// </summary>
+    /// <remarks>
+    /// **Example Request:**
+    /// 
+    /// ```json
+    // {
+    //   "email": "toanlv@gmail.com",
+    //   "password": "admin123"
+    // }
+    /// ```
+    /// </remarks>
     [HttpPost("login")]
     [ProducesResponseType(typeof(LoginResponseDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
