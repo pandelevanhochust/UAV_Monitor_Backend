@@ -31,7 +31,8 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── Database (PostgreSQL via EF Core) ────────────────────────────────────────
-var connectionString = $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
+var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
+                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
                        $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
                        $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "uav_system"};" +
                        $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
@@ -41,23 +42,31 @@ builder.Services.AddDbContext<DeviceDbContext>(options =>
     options.UseNpgsql(connectionString));
 
 // ── Redis (StackExchange.Redis — singleton IConnectionMultiplexer) ────────────
-var redisPassword = Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? "";
-var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost";
-var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";
-
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect($"{redisHost}:{redisPort},password={redisPassword},abortConnect=false"));
+{
+    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
+                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
+    return ConnectionMultiplexer.Connect(connStr);
+});
 
 // ── RabbitMQ (raw RabbitMQ.Client — NO MassTransit) ──────────────────────────
 builder.Services.AddSingleton<IConnectionFactory>(_ =>
-    new ConnectionFactory
+{
+    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        return new ConnectionFactory { Uri = new Uri(connStr) };
+    }
+    
+    return new ConnectionFactory
     {
         HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
         Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
         UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
         Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
         VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
-    });
+    };
+});
 
 // ── Dependency Injection ─────────────────────────────────────────────────────
 builder.Services.AddScoped<IDeviceRepository, DeviceRepository>();

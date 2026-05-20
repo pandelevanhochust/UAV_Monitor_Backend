@@ -29,23 +29,31 @@ builder.Services.AddSignalR(options =>
 });
 
 // ── Redis (reverse-lookup: device:meta:{id} → monitor_id) ────────────────────
-var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost";
-var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";
-var redisPassword = Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? "";
-
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect($"{redisHost}:{redisPort},password={redisPassword},abortConnect=false"));
+{
+    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
+                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
+    return ConnectionMultiplexer.Connect(connStr);
+});
 
 // ── RabbitMQ (raw client — NO MassTransit) ───────────────────────────────────
 builder.Services.AddSingleton<IConnectionFactory>(_ =>
-    new ConnectionFactory
+{
+    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        return new ConnectionFactory { Uri = new Uri(connStr) };
+    }
+    
+    return new ConnectionFactory
     {
         HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
         Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
         UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
         Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
         VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
-    });
+    };
+});
 
 // ── Background Event Consumers ───────────────────────────────────────────────
 builder.Services.AddHostedService<DroneAlertConsumer>();

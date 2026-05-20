@@ -22,16 +22,18 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── ClickHouse (log reads — NEVER PostgreSQL, Zero Cross-Over) ──────────────
-var clickHouseHost = Environment.GetEnvironmentVariable("CLICKHOUSE_HOST") ?? "localhost";
-var clickHousePort = Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123";
-
 builder.Services.AddSingleton(_ =>
-    new ClickHouseConnection($"Host={clickHouseHost};Port={clickHousePort};Database=uav_logs"));
+{
+    var connStr = builder.Configuration.GetConnectionString("ClickHouseConnection") ??
+                  $"Host={Environment.GetEnvironmentVariable("CLICKHOUSE_HOST") ?? "localhost"};Port={Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123"};Database=uav_logs";
+    return new ClickHouseConnection(connStr);
+});
 
 builder.Services.AddSingleton<ILogRepository, ClickHouseLogRepository>();
 
 // ── gRPC Client → UserService (monitor device scoping) ──────────────────────
-var userServiceUrl = Environment.GetEnvironmentVariable("USER_SERVICE_GRPC_URL") ?? "http://userservice:9080";
+var userServiceUrl = builder.Configuration.GetSection("GrpcSettings")["UserServiceUrl"] ?? 
+                     Environment.GetEnvironmentVariable("USER_SERVICE_GRPC_URL") ?? "http://userservice:9080";
 
 builder.Services.AddSingleton(_ =>
 {

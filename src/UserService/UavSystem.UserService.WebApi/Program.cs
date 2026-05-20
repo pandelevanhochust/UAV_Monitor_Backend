@@ -30,7 +30,8 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── Database (PostgreSQL via EF Core) ────────────────────────────────────────
-var connectionString = $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
+var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
+                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
                        $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
                        $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "uav_system"};" +
                        $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +

@@ -36,22 +36,24 @@ builder.Services.AddSingleton(channel.Writer);
 builder.Services.AddSingleton(channel.Reader);
 
 // ── Redis (device validation + heartbeat — NEVER PostgreSQL) ─────────────────
-var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost";
-var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";
-var redisPassword = Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? "";
-
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect($"{redisHost}:{redisPort},password={redisPassword},abortConnect=false"));
+{
+    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
+                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
+    return ConnectionMultiplexer.Connect(connStr);
+});
 
 // ── ClickHouse (log writes — NEVER PostgreSQL) ──────────────────────────────
-var clickHouseHost = Environment.GetEnvironmentVariable("CLICKHOUSE_HOST") ?? "localhost";
-var clickHousePort = Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123";
-
 builder.Services.AddSingleton(_ =>
-    new ClickHouseConnection($"Host={clickHouseHost};Port={clickHousePort};Database=uav_logs"));
+{
+    var connStr = builder.Configuration.GetConnectionString("ClickHouseConnection") ??
+                  $"Host={Environment.GetEnvironmentVariable("CLICKHOUSE_HOST") ?? "localhost"};Port={Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123"};Database=uav_logs";
+    return new ClickHouseConnection(connStr);
+});
 
 // ── gRPC Client → DeviceService (state transitions) ─────────────────────────
-var deviceServiceUrl = Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? "http://deviceservice:9081";
+var deviceServiceUrl = builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? 
+                       Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? "http://deviceservice:9081";
 
 builder.Services.AddSingleton(_ =>
 {
@@ -61,14 +63,22 @@ builder.Services.AddSingleton(_ =>
 
 // ── RabbitMQ (alert publishing — raw client, NO MassTransit) ─────────────────
 builder.Services.AddSingleton<IConnectionFactory>(_ =>
-    new ConnectionFactory
+{
+    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
+    if (!string.IsNullOrEmpty(connStr))
+    {
+        return new ConnectionFactory { Uri = new Uri(connStr) };
+    }
+    
+    return new ConnectionFactory
     {
         HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
         Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
         UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
         Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
         VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
-    });
+    };
+});
 
 // ── Background Worker ────────────────────────────────────────────────────────
 builder.Services.AddHostedService<IngestionWorker>();
