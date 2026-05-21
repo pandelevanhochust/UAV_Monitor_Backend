@@ -1,81 +1,64 @@
 -- ============================================================================
--- UAV Drone Detection System — PostgreSQL Database Initialization
--- Ensures the database is ready before EF Core connects.
+-- UAV Drone Detection System — Database-per-Service Initialization
 --
--- NOTE: The POSTGRES_DB variable is set in docker-compose.yml and creates
--- the database automatically. This script creates the schema structure,
--- required extensions, and verifies the database is ready.
+-- ARCHITECTURE: Each microservice owns its own isolated PostgreSQL database.
+--   • UserService   → uav_user_db
+--   • DeviceService → uav_device_db
+--
+-- This script runs automatically when the postgres container starts for the
+-- FIRST TIME (Docker mounts it into /docker-entrypoint-initdb.d/).
+-- It will NOT re-run on subsequent starts (Docker skips init if data exists).
 --
 -- Execution Order: 02 (runs AFTER 01-init-enums.sql)
+-- Context: Executes in the default 'postgres' superuser session.
 -- ============================================================================
 
--- Verify we are connected to the correct database
--- (Docker auto-creates DB from POSTGRES_DB env var)
-DO $$
-BEGIN
-    RAISE NOTICE 'Connected to database: %', current_database();
-    RAISE NOTICE 'PostgreSQL version: %', version();
-END
-$$;
+-- ── 1. Create isolated databases ─────────────────────────────────────────────
 
--- Ensure UUID generation extension is available
+-- UserService owns this database exclusively
+CREATE DATABASE uav_user_db
+    WITH
+    OWNER     = uav_admin
+    ENCODING  = 'UTF8'
+    LC_COLLATE = 'en_US.utf8'
+    LC_CTYPE   = 'en_US.utf8'
+    TEMPLATE  = template0;
+
+-- DeviceService owns this database exclusively
+CREATE DATABASE uav_device_db
+    WITH
+    OWNER     = uav_admin
+    ENCODING  = 'UTF8'
+    LC_COLLATE = 'en_US.utf8'
+    LC_CTYPE   = 'en_US.utf8'
+    TEMPLATE  = template0;
+
+-- ── 2. Grant privileges ───────────────────────────────────────────────────────
+
+GRANT ALL PRIVILEGES ON DATABASE uav_user_db   TO uav_admin;
+GRANT ALL PRIVILEGES ON DATABASE uav_device_db TO uav_admin;
+
+-- ── 3. Enable extensions in each database ────────────────────────────────────
+-- Extensions must be created per-database in PostgreSQL.
+
+\connect uav_user_db
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- ============================================================================
--- USERS TABLE (managed by EF Core migrations, but scaffolded here as safety net)
--- If EF Core migrations have not yet run, this ensures the table exists
--- with the correct structure for first-boot scenarios.
--- ============================================================================
+\connect uav_device_db
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE IF NOT EXISTS users (
-    user_id       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    username      VARCHAR(255) NOT NULL UNIQUE,
-    email         VARCHAR(255) NOT NULL UNIQUE,
-    password_hash VARCHAR(255) NOT NULL,
-    role          user_role NOT NULL DEFAULT 'MONITOR',
-    updated_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- Partial index for fast username lookups during login
-CREATE INDEX IF NOT EXISTS idx_users_username ON users (username);
-
--- ============================================================================
--- DEVICES TABLE (managed by EF Core migrations, but scaffolded here as safety net)
--- ============================================================================
-
-CREATE TABLE IF NOT EXISTS devices (
-    device_id          BIGINT PRIMARY KEY,                   -- Assigned by admin
-    location_name      VARCHAR(255) NOT NULL,
-    status             device_status NOT NULL DEFAULT 'OFFLINE',
-    assigned_monitor_id UUID,                                 -- FK to users(user_id)
-    api_key_hash       VARCHAR(255) NOT NULL,
-    updated_at         TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
--- Index for monitor-scoped device queries
-CREATE INDEX IF NOT EXISTS idx_devices_monitor ON devices (assigned_monitor_id);
-
--- ============================================================================
--- username: admin
--- email: toanlv@gmail.com
--- password: admin123
--- SEED: Default admin user (password: "admin123" — CHANGE IN PRODUCTION)
--- BCrypt hash of "admin123" — generated deterministically for dev bootstrap
--- ============================================================================
-
-INSERT INTO users (user_id, username, email, password_hash, role)
-VALUES (
-    '00000000-0000-0000-0000-000000000001',
-    'admin',
-    'toanlv@gmail.com',
-    'AQAAAAIAAYagAAAAEI9gB8rNiswJtG+1nJmZ8kS7qMlh/gCHb1uO+12345abcdefg==',
-    'ADMIN'
-)
-ON CONFLICT (username) DO NOTHING;
+-- ── 4. Confirmation ──────────────────────────────────────────────────────────
+\connect postgres
 
 DO $$
 BEGIN
-    RAISE NOTICE 'Database initialization complete. Tables: users, devices. Default admin seeded.';
+    RAISE NOTICE '=======================================================';
+    RAISE NOTICE 'Database-per-Service initialization complete.';
+    RAISE NOTICE '  uav_user_db   → owned by uav_admin (UserService)';
+    RAISE NOTICE '  uav_device_db → owned by uav_admin (DeviceService)';
+    RAISE NOTICE 'EF Core migrations will create tables on first run.';
+    RAISE NOTICE '=======================================================';
 END
 $$;

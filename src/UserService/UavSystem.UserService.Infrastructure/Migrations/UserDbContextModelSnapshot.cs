@@ -20,7 +20,6 @@ namespace UavSystem.UserService.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "public", "user_role", new[] { "admin", "monitor" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("UavSystem.UserService.Domain.Entities.User", b =>
@@ -46,7 +45,8 @@ namespace UavSystem.UserService.Infrastructure.Migrations
                     b.Property<string>("Role")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasDefaultValue("Monitor")
                         .HasColumnName("role");
 

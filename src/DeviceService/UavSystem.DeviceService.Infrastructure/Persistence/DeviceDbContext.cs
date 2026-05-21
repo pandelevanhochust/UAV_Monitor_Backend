@@ -12,7 +12,10 @@ public sealed class DeviceDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasPostgresEnum<DeviceStatus>("public", "device_status");
+        // NOTE: HasPostgresEnum<DeviceStatus> intentionally removed.
+        // EF Core is configured with .HasConversion<string>() below,
+        // which stores enum values as VARCHAR — no physical Postgres TYPE needed.
+        // Physical ENUMs caused __EFMigrationsHistory conflicts across services.
 
         modelBuilder.Entity<Device>(entity =>
         {
@@ -30,6 +33,7 @@ public sealed class DeviceDbContext : DbContext
 
             entity.Property(e => e.Status)
                   .HasColumnName("status")
+                  .HasMaxLength(50)
                   .HasDefaultValue(DeviceStatus.Offline)
                   .HasConversion<string>();
 

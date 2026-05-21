@@ -31,11 +31,12 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // ── Database (PostgreSQL via EF Core) ────────────────────────────────────────
 var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
-                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
+                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "127.0.0.1"};" +
                        $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
-                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "uav_system"};" +
+                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_USER") ?? "uav_user_db"};" +
                        $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
-                       $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""}";
+                       $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""};" +
+                       "Include Error Detail=true;";
 
 builder.Services.AddDbContext<UserDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -85,11 +86,11 @@ if (app.Environment.IsDevelopment())
 app.MapControllers();
 app.MapGrpcService<UserGrpcService>();
 
-// // ── Auto-migrate on startup (dev only) ───────────────────────────────────────
-// using (var scope = app.Services.CreateScope())
-// {
-//     var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
-//     await db.Database.MigrateAsync();
-// }
+// ── Auto-migrate on startup (dev only) ───────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
+    await db.Database.MigrateAsync();
+}
 
 app.Run();

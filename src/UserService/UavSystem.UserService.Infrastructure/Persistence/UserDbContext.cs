@@ -12,7 +12,10 @@ public sealed class UserDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        modelBuilder.HasPostgresEnum<UserRole>("public", "user_role");
+        // NOTE: HasPostgresEnum<UserRole> intentionally removed.
+        // EF Core is configured with .HasConversion<string>() below,
+        // which stores enum values as VARCHAR — no physical Postgres TYPE needed.
+        // Physical ENUMs caused __EFMigrationsHistory conflicts across services.
 
         modelBuilder.Entity<User>(entity =>
         {
@@ -44,6 +47,7 @@ public sealed class UserDbContext : DbContext
 
             entity.Property(e => e.Role)
                   .HasColumnName("role")
+                  .HasMaxLength(50)
                   .HasDefaultValue(UserRole.Monitor)
                   .HasConversion<string>();
 

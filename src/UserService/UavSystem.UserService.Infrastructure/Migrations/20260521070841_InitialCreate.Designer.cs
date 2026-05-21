@@ -12,7 +12,7 @@ using UavSystem.UserService.Infrastructure.Persistence;
 namespace UavSystem.UserService.Infrastructure.Migrations
 {
     [DbContext(typeof(UserDbContext))]
-    [Migration("20260520103149_InitialCreate")]
+    [Migration("20260521070841_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -23,7 +23,6 @@ namespace UavSystem.UserService.Infrastructure.Migrations
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "public", "user_role", new[] { "admin", "monitor" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("UavSystem.UserService.Domain.Entities.User", b =>
@@ -31,7 +30,7 @@ namespace UavSystem.UserService.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
-                        .HasColumnName("id")
+                        .HasColumnName("user_id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
                     b.Property<string>("Email")
@@ -49,7 +48,8 @@ namespace UavSystem.UserService.Infrastructure.Migrations
                     b.Property<string>("Role")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasDefaultValue("Monitor")
                         .HasColumnName("role");
 

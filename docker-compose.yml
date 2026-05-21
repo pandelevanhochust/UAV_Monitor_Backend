@@ -62,7 +62,7 @@ services:
   # DATA STORES
   # ==========================================================================
 
-  # ---------- PostgreSQL — User & Device Registry ----------
+  # ---------- PostgreSQL — User & Device Registry (Database-per-Service) ----------
   postgres:
     image: postgres:16-alpine
     container_name: uav-postgres
@@ -70,20 +70,24 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      # NOTE: POSTGRES_DB is intentionally omitted.
+      # The init scripts in /docker-entrypoint-initdb.d/ create two isolated
+      # databases: uav_user_db (UserService) and uav_device_db (DeviceService).
+      # Docker will auto-create a default 'postgres' maintenance DB.
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5432:5432"
+      - "5433:5432"
     networks:
       - uav-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # Health-check against the default 'postgres' maintenance DB
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
 
   # ---------- ClickHouse — Columnar Log Storage ----------
   clickhouse:
@@ -169,10 +173,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: "http://+:8080"
-      # PostgreSQL
+      # PostgreSQL — UserService owns uav_user_db exclusively
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB_USER}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # Redis
@@ -207,10 +211,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: "http://+:8081"
-      # PostgreSQL
+      # PostgreSQL — DeviceService owns uav_device_db exclusively
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_DB: ${POSTGRES_DB_DEVICE}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # Redis

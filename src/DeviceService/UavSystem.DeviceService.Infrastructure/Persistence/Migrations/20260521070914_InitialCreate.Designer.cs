@@ -12,7 +12,7 @@ using UavSystem.DeviceService.Infrastructure.Persistence;
 namespace UavSystem.DeviceService.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(DeviceDbContext))]
-    [Migration("20260520054705_InitialCreate")]
+    [Migration("20260521070914_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -23,7 +23,6 @@ namespace UavSystem.DeviceService.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "public", "device_status", new[] { "online", "offline", "error" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("UavSystem.DeviceService.Domain.Entities.Device", b =>
@@ -51,7 +50,8 @@ namespace UavSystem.DeviceService.Infrastructure.Persistence.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
                         .HasDefaultValue("Offline")
                         .HasColumnName("status");
 

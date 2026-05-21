@@ -32,11 +32,12 @@ builder.WebHost.ConfigureKestrel(options =>
 
 // ── Database (PostgreSQL via EF Core) ────────────────────────────────────────
 var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
-                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
+                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "127.0.0.1"};" +
                        $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
-                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "uav_system"};" +
+                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_DEVICE") ?? "uav_device_db"};" +
                        $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
-                       $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""}";
+                       $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""};" +
+                       "Include Error Detail=true;";
 
 builder.Services.AddDbContext<DeviceDbContext>(options =>
     options.UseNpgsql(connectionString));

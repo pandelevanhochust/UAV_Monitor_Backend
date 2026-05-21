@@ -13,8 +13,8 @@ public sealed class DeviceDbContextDesignTimeFactory : IDesignTimeDbContextFacto
     {
         var optionsBuilder = new DbContextOptionsBuilder<DeviceDbContext>();
 
-        // Default design-time connection — local dev PostgreSQL
-        var connectionString = "Host=localhost;Port=5432;Database=uav_system;Username=uav_admin;Password=dev";
+        // Default design-time connection — local dev PostgreSQL (Docker exposed on 127.0.0.1:5433)
+        var connectionString = "Host=127.0.0.1;Port=5433;Database=uav_device_db;Username=uav_admin;Password=hust_uav_secure_pass_2026;Include Error Detail=true;";
 
         optionsBuilder.UseNpgsql(connectionString);
 

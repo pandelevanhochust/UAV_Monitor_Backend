@@ -1,20 +1,17 @@
 -- ============================================================================
--- UAV Drone Detection System — PostgreSQL Initialization
--- Creates enum types and extensions required by UserService & DeviceService
+-- UAV Drone Detection System — PostgreSQL Cluster Initialization
+-- Phase 1: Enable shared extensions on the default 'postgres' database.
+--
+-- REMOVED: CREATE TYPE ... AS ENUM (user_role, device_status)
+-- REASON:  EF Core is configured with .HasConversion<string>() in both
+--          UserDbContext and DeviceDbContext. Physical enum types in PostgreSQL
+--          cause migration conflicts when multiple services share one cluster
+--          and make future schema evolution unnecessarily difficult.
+--          Values are stored as VARCHAR/TEXT — simpler, portable, extensible.
+--
+-- Execution Order: 01 (runs FIRST, in the default 'postgres' DB context)
 -- ============================================================================
 
--- Enable UUID generation
+-- Enable UUID generation (available cluster-wide after creation)
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- Enum types used by EF Core mappings
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
-        CREATE TYPE user_role AS ENUM ('ADMIN', 'MONITOR');
-    END IF;
-
-    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'device_status') THEN
-        CREATE TYPE device_status AS ENUM ('ONLINE', 'OFFLINE', 'ERROR');
-    END IF;
-END
-$$;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
