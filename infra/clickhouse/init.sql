@@ -25,4 +25,4 @@ CREATE TABLE IF NOT EXISTS uav_logs.radar_logs
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (device_id, timestamp)
-TTL timestamp + INTERVAL 3 MONTH;
+TTL toDateTime(timestamp) + INTERVAL 3 MONTH;

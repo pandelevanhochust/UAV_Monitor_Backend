@@ -238,6 +238,7 @@ public sealed class IngestionWorker : BackgroundService
                 p.ControlState ?? string.Empty
             });
 
+            await bulkCopy.InitAsync();
             await bulkCopy.WriteToServerAsync(rows, ct);
 
             _logger.LogDebug("ClickHouse: wrote {Count} rows to radar_logs", batch.Count);
