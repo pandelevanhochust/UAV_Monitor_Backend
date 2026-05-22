@@ -1,0 +1,7 @@
+admin123:   $2a$11$kr2nwn5997f5u8JxORm.QePqd91TxqzaVDBWPMU9zMV59xwhng0iq
+monitor123: $2a$11$97d9Vcgd7jd8RBJ52l8Al.YkRiHzxmDvR05.TkF9DaTz16pU3uS0i
+monitor456: $2a$11$1ShpIx7rv/I9IGDP8mxE/eCNRsanYsnMzXv/xyT8JZ2a0fGM86WhO
+
+apikey-device-001: $2a$11$fDX.YSw.UtCLsF.6cwD/MO2Pg4JiiWsCBIhay28ToisFyJkVrPoW6
+apikey-device-002: $2a$11$QYD3/P1xDKONuNMft9mfvu0EaPGIVOqTf8pL3lWU.sBArvKTE9Nu6
+apikey-device-003: $2a$11$5Lw27ACIxHAal2mtESZEl.DUnDy.IqT6QjcwEGuIL9XWgJNxWo7.K

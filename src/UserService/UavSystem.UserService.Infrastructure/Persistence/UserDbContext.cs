@@ -20,7 +20,7 @@ public sealed class UserDbContext : DbContext
 
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id)
-                  .HasColumnName("user_id")
+                  .HasColumnName("id")
                   .HasDefaultValueSql("gen_random_uuid()");
 
             entity.Property(e => e.Username)

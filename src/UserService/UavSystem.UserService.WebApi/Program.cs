@@ -33,7 +33,7 @@ builder.WebHost.ConfigureKestrel(options =>
 var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
                        $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
                        $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
-                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB") ?? "uav_system"};" +
+                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_USER") ?? "uav_user_db"};" +
                        $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
                        $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""}";
 
