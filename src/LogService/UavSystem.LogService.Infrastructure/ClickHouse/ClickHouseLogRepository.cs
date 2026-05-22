@@ -78,7 +78,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
         var offset = (page - 1) * pageSize;
 
         var dataSql = $@"
-            SELECT device_id, timestamp, status, detected, drone_type, accuracy, control_state
+            SELECT device_id, timestamp, status, detected, drone_type, accuracy, control_state, latency
             FROM radar_logs
             {whereClause}
             ORDER BY timestamp DESC
@@ -95,13 +95,14 @@ public sealed class ClickHouseLogRepository : ILogRepository
         while (await reader.ReadAsync(ct))
         {
             items.Add(new LogEntryDto(
-                DeviceId: reader.GetInt64(0),
+                DeviceId: Convert.ToInt64(reader.GetValue(0)),
                 Timestamp: reader.GetDateTime(1),
                 Status: reader.GetString(2),
                 Detected: reader.GetBoolean(3),
                 DroneType: reader.GetString(4),
                 Accuracy: reader.GetFloat(5),
-                ControlState: reader.IsDBNull(6) ? null : reader.GetString(6)
+                ControlState: reader.IsDBNull(6) ? null : reader.GetString(6),
+                Latency: reader.GetFloat(7)
             ));
         }
 
@@ -116,8 +117,8 @@ public sealed class ClickHouseLogRepository : ILogRepository
 
         if (deviceId.HasValue)
         {
-            conditions.Add("device_id = {device_id:Int64}");
-            parameters["device_id"] = deviceId.Value;
+            conditions.Add("device_id = {device_id:UInt16}");
+            parameters["device_id"] = Convert.ToUInt16(deviceId.Value);
         }
 
         if (from.HasValue)
@@ -149,8 +150,8 @@ public sealed class ClickHouseLogRepository : ILogRepository
         if (deviceIdFilter.HasValue)
         {
             // Specific device requested (already validated against allowed list)
-            conditions.Add("device_id = {device_id:Int64}");
-            parameters["device_id"] = deviceIdFilter.Value;
+            conditions.Add("device_id = {device_id:UInt16}");
+            parameters["device_id"] = Convert.ToUInt16(deviceIdFilter.Value);
         }
         else
         {

@@ -17,4 +17,5 @@ public readonly record struct LogPacket
     public required string DroneType { get; init; }     // e.g., "DJI Mavic 3", "Unknown"
     public required float Accuracy { get; init; }       // 0.0–1.0 confidence score
     public string? ControlState { get; init; }          // "Controlled" | "Autonomous" | null
+    public required float Latency { get; init; }          // Latency in ms
 }

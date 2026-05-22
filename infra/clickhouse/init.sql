@@ -14,13 +14,14 @@ CREATE DATABASE IF NOT EXISTS uav_logs;
 
 CREATE TABLE IF NOT EXISTS uav_logs.radar_logs
 (
-    device_id      Int64,
+    device_id      UInt16,
     timestamp      DateTime64(3, 'UTC'),
     status         LowCardinality(String),
-    detected       Bool,                                -- true/false
+    detected       Bool,                              
     drone_type     LowCardinality(String),
     accuracy       Float32,
-    control_state  LowCardinality(Nullable(String))
+    control_state  LowCardinality(Nullable(String)),
+    latency        Float32
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)

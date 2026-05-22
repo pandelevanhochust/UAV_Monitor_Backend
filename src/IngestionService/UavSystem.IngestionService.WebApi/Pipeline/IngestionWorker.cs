@@ -229,13 +229,14 @@ public sealed class IngestionWorker : BackgroundService
 
             var rows = batch.Select(p => new object[]
             {
-                p.DeviceId,
+                Convert.ToUInt16(p.DeviceId),
                 p.Timestamp,
                 p.Status,
                 p.Detected == 1,  // ClickHouse Bool
                 p.DroneType,
                 p.Accuracy,
-                p.ControlState ?? string.Empty
+                p.ControlState ?? string.Empty,
+                p.Latency
             });
 
             await bulkCopy.InitAsync();
