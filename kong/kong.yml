@@ -33,26 +33,12 @@ services:
         paths:
           - /api/v1/admin/users
         strip_path: false
-        plugins:
-          - name: forward-auth
-            config:
-              url: grpc://userservice:9080
-              auth_response_headers:
-                - X-User-ID
-                - X-User-Role
 
   # ==========================================================================
   # DEVICE SERVICE BOUNDARY
   # ==========================================================================
   - name: device-service
     url: http://deviceservice:8081
-    plugins:
-      - name: forward-auth
-        config:
-          url: grpc://userservice:9080
-          auth_response_headers:
-            - X-User-ID
-            - X-User-Role
     routes:
       - name: device-management-routes
         paths:
@@ -65,13 +51,6 @@ services:
   # ==========================================================================
   - name: log-service
     url: http://logservice:8083
-    plugins:
-      - name: forward-auth
-        config:
-          url: grpc://userservice:9080
-          auth_response_headers:
-            - X-User-ID
-            - X-User-Role
     routes:
       - name: analytical-log-routes
         paths:
