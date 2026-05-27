@@ -1,0 +1,165 @@
+/* ─── Login Page Layout ─────────────────────────────────────────────────────── */
+
+.root {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: var(--uav-bg-base);
+}
+
+/* ─── Animated Radar Grid Background ──────────────────────────────────────── */
+
+.background {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* Dot grid pattern */
+  background-image:
+    radial-gradient(circle, rgba(0, 212, 255, 0.08) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Radial vignette on top of the grid */
+.background::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 80% 70% at 50% 50%,
+    transparent 30%,
+    var(--uav-bg-base) 100%
+  );
+}
+
+/* Radar sweep — rotating conic gradient arc */
+.background::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 900px;
+  height: 900px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgba(0, 212, 255, 0.06) 30deg,
+    rgba(0, 212, 255, 0.02) 60deg,
+    transparent 90deg
+  );
+  animation: radar-sweep 8s linear infinite;
+  pointer-events: none;
+}
+
+/* ─── Login Card ─────────────────────────────────────────────────────────────── */
+
+.card {
+  position: relative;
+  z-index: 1;
+  width: 420px;
+  border: 1px solid var(--uav-border) !important;
+  background: var(--uav-bg-container) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 212, 255, 0.06),
+    0 24px 64px rgba(0, 0, 0, 0.6),
+    0 0 60px rgba(0, 212, 255, 0.04) !important;
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+/* ─── Branding / Logo ────────────────────────────────────────────────────────── */
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+.logoIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--uav-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 255, 0.06);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+  font-size: 24px;
+  color: var(--uav-color-primary);
+  margin-bottom: 4px;
+}
+
+.logoTitle {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--uav-text-primary);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.logoSubtitle {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--uav-text-secondary);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ─── Status Indicator ──────────────────────────────────────────────────────── */
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  font-size: 11px;
+  color: var(--uav-status-online);
+  letter-spacing: 0.08em;
+  margin-bottom: 32px;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--uav-status-online);
+  animation: pulse-online 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* ─── Error Alert ────────────────────────────────────────────────────────────── */
+
+.errorAlert {
+  margin-bottom: 20px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+/* ─── Form Footer ────────────────────────────────────────────────────────────── */
+
+.footer {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--uav-text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .card {
+    width: calc(100vw - 32px);
+  }
+}

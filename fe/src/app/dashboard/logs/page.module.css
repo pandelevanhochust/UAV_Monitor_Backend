@@ -1,0 +1,63 @@
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: var(--uav-bg-container);
+  border: 1px solid var(--uav-border);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.filterLabel {
+  font-size: 12px;
+  color: var(--uav-text-secondary);
+  white-space: nowrap;
+}
+
+.deviceSelect {
+  width: 200px;
+}
+
+.rangePicker {
+  width: 280px;
+}
+
+.filterDivider {
+  width: 1px;
+  height: 20px;
+  background: var(--uav-border);
+  flex-shrink: 0;
+}
+
+.filterSpacer {
+  flex: 1;
+}
+
+.logTableWrapper {
+  overflow: hidden;
+}
+
+.timestampCell {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--uav-text-secondary);
+}
+
+.droneTypeCell {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uav-color-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.accuracyCell {
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.emptyHint {
+  padding: 64px 0;
+  text-align: center;
+}

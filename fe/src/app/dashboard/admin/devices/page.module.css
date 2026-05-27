@@ -1,0 +1,66 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  width: 260px;
+}
+
+.deviceCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deviceLocation {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--uav-text-primary);
+}
+
+.deviceId {
+  font-size: 11px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--uav-text-muted);
+}
+
+.apiKeyBox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--uav-bg-base);
+  border: 1px solid var(--uav-color-primary);
+  border-radius: 6px;
+  margin-top: 8px;
+}
+
+.apiKeyLabel {
+  font-size: 11px;
+  color: var(--uav-text-secondary);
+  margin-bottom: 4px;
+  letter-spacing: 0.06em;
+}
+
+.apiKeyValue {
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--uav-color-primary);
+  word-break: break-all;
+  flex: 1;
+}
+
+.apiKeyWarning {
+  font-size: 11px;
+  color: var(--uav-status-error);
+  margin-top: 4px;
+}
+
+.emptyState {
+  padding: 48px 0;
+  text-align: center;
+}

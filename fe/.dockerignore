@@ -1,0 +1,41 @@
+# Docker ignore file for the fe (Next.js) service
+# Prevents large/unnecessary files from being sent to the Docker build context
+
+# Dependencies (rebuilt inside Docker)
+node_modules
+
+# Next.js build output (rebuilt inside Docker)
+.next
+out
+
+# Local environment files (secrets must come from docker-compose env_file or secrets)
+.env
+.env.local
+.env*.local
+
+# Dev / editor artifacts
+.git
+.gitignore
+.DS_Store
+*.swp
+*.swo
+Thumbs.db
+
+# Documentation
+README.md
+*.md
+
+# Test files
+**/__tests__
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# TypeScript source maps (not needed in production)
+**/*.map
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

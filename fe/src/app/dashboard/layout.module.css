@@ -1,0 +1,175 @@
+.shell {
+  min-height: 100vh;
+  background: var(--uav-bg-base);
+}
+
+/* ─── Sidebar ────────────────────────────────────────────────────────────────── */
+
+.sider {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  border-right: 1px solid var(--uav-border) !important;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.siderLogo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--uav-border);
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.siderLogoIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid var(--uav-color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 212, 255, 0.08);
+  box-shadow: 0 0 12px rgba(0, 212, 255, 0.15);
+  color: var(--uav-color-primary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.siderLogoText {
+  display: flex;
+  flex-direction: column;
+}
+
+.siderLogoTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--uav-text-primary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.siderLogoSub {
+  font-size: 10px;
+  color: var(--uav-text-muted);
+  letter-spacing: 0.08em;
+}
+
+.siderMenu {
+  flex: 1;
+  border-right: none !important;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.siderBottom {
+  padding: 12px;
+  border-top: 1px solid var(--uav-border);
+  flex-shrink: 0;
+}
+
+.versionBadge {
+  font-size: 10px;
+  color: var(--uav-text-muted);
+  text-align: center;
+  letter-spacing: 0.06em;
+}
+
+/* ─── Main area ──────────────────────────────────────────────────────────────── */
+
+.mainLayout {
+  min-height: 100vh;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────────── */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 64px !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px !important;
+  border-bottom: 1px solid var(--uav-border);
+  background: var(--uav-bg-sidebar) !important;
+  backdrop-filter: blur(8px);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.pageTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--uav-text-primary);
+  letter-spacing: 0.02em;
+}
+
+.systemStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  font-size: 11px;
+  color: var(--uav-status-online);
+  letter-spacing: 0.06em;
+}
+
+.systemStatusDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--uav-status-online);
+  animation: pulse-online 2s ease-in-out infinite;
+}
+
+.userTag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 6px;
+  background: var(--uav-bg-elevated);
+  border: 1px solid var(--uav-border);
+}
+
+.userName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--uav-text-primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Content ────────────────────────────────────────────────────────────────── */
+
+.content {
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+  animation: fade-in 0.2s ease-out forwards;
+}

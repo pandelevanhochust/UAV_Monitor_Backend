@@ -1,0 +1,246 @@
+/**
+ * globals.css — UAV Drone Detection System Dashboard
+ *
+ * Contents (in order):
+ *  1. Google Fonts — JetBrains Mono
+ *  2. CSS custom properties (Industrial Dark token map)
+ *  3. CSS reset (Ant Design compatible)
+ *  4. Custom webkit scrollbar
+ *  5. Status pulse @keyframes animations
+ *  6. Utility classes (animation assignment helpers only — no layout utilities)
+ */
+
+/* ─── 1. Google Fonts ──────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
+/* ─── 2. CSS Custom Properties (Industrial Dark Token Map) ─────────────────── */
+/*
+ * These variables mirror the Ant Design design tokens defined in AntdProvider.tsx.
+ * Use them inside CSS Modules when React's useToken() hook is not available.
+ */
+
+:root {
+  /* Brand */
+  --uav-color-primary:         #00D4FF;
+  --uav-color-primary-dim:     rgba(0, 212, 255, 0.15);
+  --uav-color-primary-glow:    rgba(0, 212, 255, 0.4);
+
+  /* Backgrounds */
+  --uav-bg-base:               #0A0D14;
+  --uav-bg-container:          #111827;
+  --uav-bg-elevated:           #1C2333;
+  --uav-bg-sidebar:            #0D1117;
+
+  /* Borders */
+  --uav-border:                #1F2D40;
+  --uav-border-subtle:         #1A2535;
+
+  /* Text */
+  --uav-text-primary:          #E2E8F0;
+  --uav-text-secondary:        #94A3B8;
+  --uav-text-muted:            #64748B;
+
+  /* Status — maps to DeviceStatus enum (claude.md §4) */
+  --uav-status-online:         #22C55E;  /* DeviceStatus.Online  */
+  --uav-status-online-glow:    rgba(34, 197, 94, 0.35);
+  --uav-status-offline:        #EF4444;  /* DeviceStatus.Offline */
+  --uav-status-offline-glow:   rgba(239, 68, 68, 0.35);
+  --uav-status-error:          #F59E0B;  /* DeviceStatus.Error   */
+  --uav-status-error-glow:     rgba(245, 158, 11, 0.35);
+
+  /* Info */
+  --uav-color-info:            #3B82F6;
+}
+
+/* ─── 3. CSS Reset (Ant Design compatible) ─────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  background-color: var(--uav-bg-base);
+  color: var(--uav-text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Prevent layout shift from scrollbar appearing/disappearing */
+  overflow-y: scroll;
+}
+
+a {
+  color: var(--uav-color-primary);
+  text-decoration: none;
+}
+
+a:hover {
+  color: color-mix(in srgb, var(--uav-color-primary) 80%, white);
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+/* ─── 4. Custom Webkit Scrollbar (Industrial Dark) ─────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--uav-bg-base);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--uav-bg-elevated);
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--uav-color-primary-glow);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--uav-bg-base);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--uav-bg-elevated) var(--uav-bg-base);
+}
+
+/* ─── 5. Status Pulse @keyframes Animations ────────────────────────────────── */
+/*
+ * Three animation states corresponding to DeviceStatus enum values (claude.md §4)
+ * and drone detection events from radar_logs (claude.md §4 ClickHouse schema).
+ *
+ * Usage via utility classes below, or directly in CSS Modules.
+ */
+
+/* pulse-online — soft green glow — DeviceStatus.Online */
+@keyframes pulse-online {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--uav-status-online-glow);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+    opacity: 0.85;
+  }
+}
+
+/* pulse-alert — aggressive red flash — radar_logs.detected = true (drone detected) */
+@keyframes pulse-alert {
+  0% {
+    box-shadow: 0 0 0 0 var(--uav-status-offline-glow);
+    background-color: var(--uav-status-offline);
+    opacity: 1;
+  }
+  40% {
+    box-shadow: 0 0 0 8px transparent;
+    background-color: color-mix(in srgb, var(--uav-status-offline) 70%, transparent);
+    opacity: 0.7;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: var(--uav-status-offline);
+    opacity: 1;
+  }
+}
+
+/* pulse-warning — amber fade — DeviceStatus.Error */
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 0 0 0 var(--uav-status-error-glow);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 5px transparent;
+    opacity: 0.75;
+  }
+}
+
+/* radar-sweep — rotating conic gradient for the radar display component */
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* fade-in — used for panel mount animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── 6. Animation Utility Classes ─────────────────────────────────────────── */
+/*
+ * These classes apply the keyframe animations to DOM elements.
+ * Assign via className in component JSX. No layout utilities.
+ */
+
+.animate-pulse-online {
+  animation: pulse-online 2s ease-in-out infinite;
+}
+
+.animate-pulse-alert {
+  animation: pulse-alert 0.8s ease-in-out infinite;
+}
+
+.animate-pulse-warning {
+  animation: pulse-warning 1.5s ease-in-out infinite;
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out forwards;
+}
+
+/* ─── Ant Design integration overrides ─────────────────────────────────────── */
+/*
+ * Minor overrides to ensure Ant Design component chrome matches
+ * the Industrial Dark palette. Prefer design tokens in AntdProvider.tsx
+ * over overrides here — only use this section for structural fixes.
+ */
+
+/* Prevent FOUC: hide body until Ant Design styles are injected */
+#__next,
+body > div:first-child {
+  min-height: 100vh;
+}
+
+/* Ant Design modal/drawer overlay */
+.ant-modal-mask,
+.ant-drawer-mask {
+  backdrop-filter: blur(2px);
+}
