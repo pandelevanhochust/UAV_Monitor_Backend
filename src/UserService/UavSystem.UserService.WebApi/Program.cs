@@ -30,12 +30,15 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── Database (PostgreSQL via EF Core) ────────────────────────────────────────
-var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
-                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
-                       $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
-                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_USER") ?? "uav_user_db"};" +
-                       $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
-                       $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""}";
+var postgresHost = Environment.GetEnvironmentVariable("POSTGRES_HOST");
+var connectionString = !string.IsNullOrEmpty(postgresHost)
+    ? $"Host={postgresHost};" +
+      $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
+      $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_USER") ?? "uav_user_db"};" +
+      $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
+      $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""};" +
+      "Include Error Detail=true;"
+    : builder.Configuration.GetConnectionString("PostgresConnection");
 
 builder.Services.AddDbContext<UserDbContext>(options =>
     options.UseNpgsql(connectionString));

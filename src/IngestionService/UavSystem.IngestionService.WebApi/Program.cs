@@ -64,20 +64,21 @@ builder.Services.AddSingleton(_ =>
 // ── RabbitMQ (alert publishing — raw client, NO MassTransit) ─────────────────
 builder.Services.AddSingleton<IConnectionFactory>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
-    if (!string.IsNullOrEmpty(connStr))
+    var rabbitHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST");
+    if (!string.IsNullOrEmpty(rabbitHost))
     {
-        return new ConnectionFactory { Uri = new Uri(connStr) };
+        return new ConnectionFactory
+        {
+            HostName = rabbitHost,
+            Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
+            UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
+            Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
+            VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
+        };
     }
     
-    return new ConnectionFactory
-    {
-        HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
-        Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
-        UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
-        Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
-        VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
-    };
+    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
+    return new ConnectionFactory { Uri = new Uri(connStr!) };
 });
 
 // ── Background Worker ────────────────────────────────────────────────────────
