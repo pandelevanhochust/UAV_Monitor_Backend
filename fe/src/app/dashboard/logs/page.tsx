@@ -43,8 +43,8 @@ export default function LogsPage() {
   const columns: ColumnsType<RadarLog> = [
     {
       title: 'Timestamp',
-      dataIndex: 'timeStamp',
-      key: 'timeStamp',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
       width: 180,
       render: (ts: string) => (
         <span className={styles.timestampCell}>
@@ -60,13 +60,6 @@ export default function LogsPage() {
       render: (id: number) => (
         <Text style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>#{id}</Text>
       ),
-    },
-    {
-      title: 'Location',
-      dataIndex: 'location',
-      key: 'location',
-      width: 160,
-      render: (loc: string) => <Text style={{ fontSize: 13, fontWeight: 500 }}>{loc}</Text>,
     },
     {
       title: 'Detection',
@@ -166,7 +159,7 @@ export default function LogsPage() {
           </span>
         }>
         <Spin spinning={isLoading}>
-          <Table<RadarLog> dataSource={logs} columns={columns} rowKey={(r) => `${r.deviceId}-${r.timeStamp}`}
+          <Table<RadarLog> dataSource={logs} columns={columns} rowKey={(r) => `${r.deviceId}-${r.timestamp}`}
             size="small" scroll={{ x: 1000 }}
             pagination={{ current: page, pageSize: PAGE_SIZE, total: metadata.total, onChange: setPage, showSizeChanger: false }}
             locale={{

@@ -54,22 +54,21 @@ export interface LatestDeviceLog {
  */
 export interface RadarLog {
   deviceId: number;
-  timeStamp: string; // ISO 8601 string
-  location: string;
+  timestamp: string; // ISO 8601 string — camelCase from C# 'Timestamp'
   status: string;
   detected: boolean;
   droneType: string | null;
   controlState: string | null;
   accuracy: number;
+  latency: number;
 }
 
+/** Matches C# PaginatedLogsDto(Items, Page, PageSize, TotalCount) */
 export interface PaginatedResponse<T> {
-  metadata: {
-    total: number;
-    page: number;
-    limit: number;
-  };
-  data: T[];
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
 }
 
 // ─── Alert / Detection Event ──────────────────────────────────────────────────
