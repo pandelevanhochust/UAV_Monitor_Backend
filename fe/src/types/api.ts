@@ -29,6 +29,15 @@ export interface Device {
   latestLog: LatestDeviceLog | null;
 }
 
+/** Returned by POST /admin/devices/{id}/assign-monitor */
+export interface DeviceDto {
+  deviceId: number;
+  locationName: string;
+  status: DeviceStatus;
+  assignedMonitorId: string | null;
+  updatedAt: string;
+}
+
 export interface LatestDeviceLog {
   timestamp: string;
   detected: boolean;
@@ -100,10 +109,10 @@ export interface DeviceStatusChangedEvent {
  */
 export interface AppUser {
   id: string;
-  name: string;
+  username: string;
   email: string;
   role: UserRole;
-  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Misc ─────────────────────────────────────────────────────────────────────

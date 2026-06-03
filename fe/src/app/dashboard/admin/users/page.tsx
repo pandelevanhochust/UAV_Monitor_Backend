@@ -18,7 +18,7 @@ import styles from './page.module.css';
 const { Text, Title } = Typography;
 
 interface CreateUserForm {
-  name: string;
+  username: string;
   email: string;
   password: string;
   role: 'Admin' | 'Monitor';
@@ -39,8 +39,8 @@ export default function AdminUsersPage() {
 
   const filtered = (users ?? []).filter(
     (u) =>
-      u.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchText.toLowerCase())
+      (u?.username || '').toLowerCase().includes(searchText.toLowerCase()) ||
+      (u?.email || '').toLowerCase().includes(searchText.toLowerCase())
   );
 
   async function handleCreate(values: CreateUserForm) {
@@ -64,7 +64,7 @@ export default function AdminUsersPage() {
       key: 'user',
       render: (_, record) => (
         <div className={styles.userCell}>
-          <span className={styles.userName}>{record.name}</span>
+          <span className={styles.userName}>{record.username}</span>
           <span className={styles.userEmail}>{record.email}</span>
         </div>
       ),
@@ -96,11 +96,11 @@ export default function AdminUsersPage() {
       render: (id: string) => <span className={styles.idCell}>{id}</span>,
     },
     {
-      title: 'Created',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
+      title: 'Updated',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
       width: 160,
-      sorter: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      sorter: (a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(),
       render: (ts: string) => (
         <Text type="secondary" style={{ fontSize: 12 }}>
           {new Date(ts).toLocaleDateString('en-GB', { dateStyle: 'medium' })}
@@ -204,7 +204,7 @@ export default function AdminUsersPage() {
           <Alert type="error" message={createError} style={{ marginBottom: 16 }} closable onClose={() => setCreateError(null)} />
         )}
         <Form form={form} layout="vertical" onFinish={handleCreate} requiredMark={false}>
-          <Form.Item name="name" label="Full Name"
+          <Form.Item name="username" label="Full Name"
             rules={[{ required: true, message: 'Name is required.' }]}>
             <Input id="create-user-name" placeholder="John Smith" />
           </Form.Item>

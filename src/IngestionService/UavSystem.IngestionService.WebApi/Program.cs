@@ -38,22 +38,26 @@ builder.Services.AddSingleton(channel.Reader);
 // ── Redis (device validation + heartbeat — NEVER PostgreSQL) ─────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
-                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
-    return ConnectionMultiplexer.Connect(connStr);
+    var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
+    var connStr = !string.IsNullOrEmpty(redisHost)
+        ? $"{redisHost}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false"
+        : builder.Configuration.GetConnectionString("RedisConnection");
+    return ConnectionMultiplexer.Connect(connStr!);
 });
 
 // ── ClickHouse (log writes — NEVER PostgreSQL) ──────────────────────────────
 builder.Services.AddSingleton(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("ClickHouseConnection") ??
-                  $"Host={Environment.GetEnvironmentVariable("CLICKHOUSE_HOST") ?? "localhost"};Port={Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123"};Database=uav_logs";
+    var chHost = Environment.GetEnvironmentVariable("CLICKHOUSE_HOST");
+    var connStr = !string.IsNullOrEmpty(chHost)
+        ? $"Host={chHost};Port={Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123"};Username={Environment.GetEnvironmentVariable("CLICKHOUSE_USER") ?? "default"};Password={Environment.GetEnvironmentVariable("CLICKHOUSE_PASSWORD") ?? ""};Database={Environment.GetEnvironmentVariable("CLICKHOUSE_DB") ?? "uav_logs"};"
+        : builder.Configuration.GetConnectionString("ClickHouseConnection");
     return new ClickHouseConnection(connStr);
 });
 
 // ── gRPC Client → DeviceService (state transitions) ─────────────────────────
-var deviceServiceUrl = builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? 
-                       Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? "http://deviceservice:9081";
+var deviceServiceUrl = Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? 
+                       builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? "http://deviceservice:9081";
 
 builder.Services.AddSingleton(_ =>
 {

@@ -10,6 +10,10 @@ import { jwtVerify } from 'jose';
  * Used by the useAuth() SWR hook to populate the current user context
  * without ever exposing the raw token to browser JavaScript.
  */
+
+// ClaimTypes.Role serializes to this URI in JwtSecurityToken
+const CLAIMS_ROLE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
+
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const token = request.cookies.get('uav_token')?.value;
 
@@ -33,9 +37,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     );
 
+    // ClaimTypes.Role uses the long URI key; fall back to short 'role' if present
+    const role = (payload[CLAIMS_ROLE] ?? payload['role'] ?? null) as string | null;
+
     return NextResponse.json({
       id: payload.sub,
-      role: payload['role'],
+      role,
       email: payload['email'] ?? null,
       name: payload['name'] ?? null,
     });

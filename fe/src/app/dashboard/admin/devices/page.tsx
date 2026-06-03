@@ -10,11 +10,12 @@ import {
 import {
   SettingOutlined, PlusOutlined, SearchOutlined,
   ReloadOutlined, CopyOutlined, WarningOutlined,
+  UserSwitchOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { apiFetch, apiPost } from '@/lib/fetcher';
 import { StatusBadge } from '@/components/StatusBadge';
-import type { Device, AppUser } from '@/types/api';
+import type { Device, AppUser, DeviceDto } from '@/types/api';
 import styles from './page.module.css';
 
 const { Text, Title } = Typography;
@@ -29,6 +30,10 @@ interface RegisterDeviceResponse {
   deviceId: number;
   locationName: string;
   apiKey: string; // Shown only once — from DeviceService on register
+}
+
+interface AssignMonitorForm {
+  monitorId?: string;
 }
 
 export default function AdminDevicesPage() {
@@ -46,21 +51,32 @@ export default function AdminDevicesPage() {
   );
 
   const [searchText, setSearchText] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
+
+  // ── Register Device state ─────────────────────────────────────────────────
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState<{ deviceId: number; apiKey: string } | null>(null);
-  const [form] = Form.useForm<RegisterDeviceForm>();
+  const [registerForm] = Form.useForm<RegisterDeviceForm>();
+
+  // ── Assign Monitor state ──────────────────────────────────────────────────
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assigningDevice, setAssigningDevice] = useState<Device | null>(null);
+  const [assigning, setAssigning] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [assignForm] = Form.useForm<AssignMonitorForm>();
+
   const [messageApi, contextHolder] = message.useMessage();
 
   const monitorUsers = (users ?? []).filter((u) => u.role === 'Monitor');
 
   const filtered = (devices ?? []).filter(
     (d) =>
-      d.locationName.toLowerCase().includes(searchText.toLowerCase()) ||
-      String(d.deviceId).includes(searchText)
+      (d?.locationName || '').toLowerCase().includes(searchText.toLowerCase()) ||
+      String(d?.deviceId || '').includes(searchText)
   );
 
+  // ── Register handler ──────────────────────────────────────────────────────
   async function handleRegister(values: RegisterDeviceForm) {
     setCreating(true);
     setCreateError(null);
@@ -70,9 +86,8 @@ export default function AdminDevicesPage() {
         values
       );
       await mutate();
-      setModalOpen(false);
-      form.resetFields();
-      // Show API key — only displayed once (claude.md §4 AdminDevicesController)
+      setRegisterModalOpen(false);
+      registerForm.resetFields();
       setNewApiKey({ deviceId: result.deviceId, apiKey: result.apiKey });
     } catch (e) {
       setCreateError((e as Error).message ?? 'Failed to register device.');
@@ -81,11 +96,47 @@ export default function AdminDevicesPage() {
     }
   }
 
+  // ── Assign monitor handler ────────────────────────────────────────────────
+  function openAssignModal(device: Device) {
+    setAssigningDevice(device);
+    setAssignError(null);
+    assignForm.setFieldsValue({
+      monitorId: device.assignedMonitorId ?? undefined,
+    });
+    setAssignModalOpen(true);
+  }
+
+  async function handleAssign(values: AssignMonitorForm) {
+    if (!assigningDevice) return;
+    setAssigning(true);
+    setAssignError(null);
+    try {
+      await apiPost<{ monitorId: string | null }, DeviceDto>(
+        `/api/proxy/admin/devices/${assigningDevice.deviceId}/assign-monitor`,
+        { monitorId: values.monitorId ?? null }
+      );
+      await mutate();
+      setAssignModalOpen(false);
+      setAssigningDevice(null);
+      assignForm.resetFields();
+      messageApi.success(
+        values.monitorId
+          ? 'Monitor assigned successfully.'
+          : 'Monitor unassigned successfully.'
+      );
+    } catch (e) {
+      setAssignError((e as Error).message ?? 'Failed to assign monitor.');
+    } finally {
+      setAssigning(false);
+    }
+  }
+
   function copyApiKey(key: string) {
     navigator.clipboard.writeText(key);
     messageApi.success('API key copied to clipboard');
   }
 
+  // ── Table columns ─────────────────────────────────────────────────────────
   const columns: ColumnsType<Device> = [
     {
       title: 'Device',
@@ -119,7 +170,7 @@ export default function AdminDevicesPage() {
         const user = (users ?? []).find((u) => u.id === monitorId);
         return user ? (
           <div>
-            <Text style={{ fontSize: 13, fontWeight: 500 }}>{user.name}</Text>
+            <Text style={{ fontSize: 13, fontWeight: 500 }}>{user.username}</Text>
             <br />
             <Text type="secondary" style={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>{user.email}</Text>
           </div>
@@ -140,6 +191,23 @@ export default function AdminDevicesPage() {
         <Text type="secondary" style={{ fontSize: 12 }}>
           {new Date(ts).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' })}
         </Text>
+      ),
+    },
+    {
+      title: 'Actions',
+      key: 'actions',
+      width: 130,
+      render: (_, record) => (
+        <Tooltip title="Assign or change monitor operator">
+          <Button
+            id={`assign-monitor-${record.deviceId}`}
+            size="small"
+            icon={<UserSwitchOutlined />}
+            onClick={() => openAssignModal(record)}
+          >
+            Assign
+          </Button>
+        </Tooltip>
       ),
     },
   ];
@@ -231,7 +299,7 @@ export default function AdminDevicesPage() {
               type="primary"
               size="small"
               icon={<PlusOutlined />}
-              onClick={() => setModalOpen(true)}
+              onClick={() => setRegisterModalOpen(true)}
             >
               Register Device
             </Button>
@@ -259,7 +327,7 @@ export default function AdminDevicesPage() {
         </Spin>
       </Card>
 
-      {/* Register Device Modal */}
+      {/* ── Register Device Modal ── */}
       <Modal
         title={
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -267,15 +335,15 @@ export default function AdminDevicesPage() {
             Register Radar Device
           </span>
         }
-        open={modalOpen}
-        onCancel={() => { setModalOpen(false); form.resetFields(); setCreateError(null); }}
+        open={registerModalOpen}
+        onCancel={() => { setRegisterModalOpen(false); registerForm.resetFields(); setCreateError(null); }}
         footer={null}
         destroyOnClose
       >
         {createError && (
           <Alert type="error" message={createError} style={{ marginBottom: 16 }} closable onClose={() => setCreateError(null)} />
         )}
-        <Form form={form} layout="vertical" onFinish={handleRegister} requiredMark={false}>
+        <Form form={registerForm} layout="vertical" onFinish={handleRegister} requiredMark={false}>
           <Form.Item name="deviceId" label="Device ID"
             rules={[{ required: true, message: 'Device ID is required.' }]}
             extra="Must match the hardware BIGINT identifier burned into the edge device.">
@@ -296,7 +364,7 @@ export default function AdminDevicesPage() {
               placeholder="Select a monitor operator..."
               allowClear
               showSearch
-              options={monitorUsers.map((u) => ({ value: u.id, label: `${u.name} (${u.email})` }))}
+              options={monitorUsers.map((u) => ({ value: u.id, label: `${u.username} (${u.email})` }))}
               filterOption={(input, option) =>
                 String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
               }
@@ -309,8 +377,81 @@ export default function AdminDevicesPage() {
             showIcon
           />
           <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
-            <Button onClick={() => setModalOpen(false)} style={{ marginRight: 8 }}>Cancel</Button>
+            <Button onClick={() => setRegisterModalOpen(false)} style={{ marginRight: 8 }}>Cancel</Button>
             <Button type="primary" htmlType="submit" loading={creating}>Register & Generate Key</Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* ── Assign Monitor Modal ── */}
+      <Modal
+        title={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <UserSwitchOutlined style={{ color: 'var(--uav-color-primary)' }} />
+            Assign Monitor — Device #{assigningDevice?.deviceId}
+          </span>
+        }
+        open={assignModalOpen}
+        onCancel={() => {
+          setAssignModalOpen(false);
+          setAssigningDevice(null);
+          assignForm.resetFields();
+          setAssignError(null);
+        }}
+        footer={null}
+        destroyOnClose
+      >
+        {assignError && (
+          <Alert type="error" message={assignError} style={{ marginBottom: 16 }} closable onClose={() => setAssignError(null)} />
+        )}
+
+        {assigningDevice && (
+          <div style={{ marginBottom: 16, padding: '8px 12px', background: 'var(--uav-bg-elevated)', borderRadius: 6 }}>
+            <Text style={{ fontSize: 12, color: 'var(--uav-text-secondary)' }}>
+              Location: <strong style={{ color: 'var(--uav-text-primary)' }}>{assigningDevice.locationName}</strong>
+            </Text>
+            <br />
+            <Text style={{ fontSize: 12, color: 'var(--uav-text-secondary)' }}>
+              Current monitor:{' '}
+              <strong style={{ color: 'var(--uav-text-primary)' }}>
+                {assigningDevice.assignedMonitorId
+                  ? (users ?? []).find((u) => u.id === assigningDevice.assignedMonitorId)?.username ?? assigningDevice.assignedMonitorId
+                  : 'Unassigned'}
+              </strong>
+            </Text>
+          </div>
+        )}
+
+        <Form form={assignForm} layout="vertical" onFinish={handleAssign} requiredMark={false}>
+          <Form.Item name="monitorId" label="Assign to Monitor">
+            <Select
+              id="assign-monitor-select"
+              placeholder="Select a monitor operator..."
+              allowClear
+              showSearch
+              options={monitorUsers.map((u) => ({ value: u.id, label: `${u.username} (${u.email})` }))}
+              filterOption={(input, option) =>
+                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 16 }}>
+            Clear the selection to unassign the current monitor from this device.
+          </Text>
+          <Form.Item style={{ marginBottom: 0, textAlign: 'right' }}>
+            <Button
+              onClick={() => {
+                setAssignModalOpen(false);
+                setAssigningDevice(null);
+                assignForm.resetFields();
+              }}
+              style={{ marginRight: 8 }}
+            >
+              Cancel
+            </Button>
+            <Button type="primary" htmlType="submit" loading={assigning} icon={<UserSwitchOutlined />}>
+              Save Assignment
+            </Button>
           </Form.Item>
         </Form>
       </Modal>
