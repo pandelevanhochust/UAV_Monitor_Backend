@@ -1,0 +1,11 @@
+columns format version: 1
+9 columns:
+`device_id` UInt16
+`timestamp` DateTime64(3, 'UTC')
+`status` LowCardinality(String)
+`detected` Bool
+`drone_type` LowCardinality(String)
+`accuracy` Float32
+`control_state` LowCardinality(Nullable(String))
+`latency` Float32
+`frequency` Float32

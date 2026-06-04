@@ -101,6 +101,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
                 Detected: reader.GetBoolean(3),
                 DroneType: reader.GetString(4),
                 Accuracy: reader.GetFloat(5),
+                ControlState: reader.IsDBNull(6) ? null : reader.GetString(6),
                 Latency: reader.GetFloat(7),
                 Frequency: reader.GetFloat(8)
             ));
