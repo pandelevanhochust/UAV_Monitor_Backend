@@ -77,7 +77,8 @@ public sealed class TelemetryController : ControllerBase
             DroneType = payload.DroneType,
             Accuracy = payload.Accuracy,
             ControlState = payload.ControlState,
-            Latency = payload.Latency
+            Latency = payload.Latency,
+            Frequency = payload.Frequency
         };
 
         if (!_channelWriter.TryWrite(packet))
@@ -106,4 +107,5 @@ public sealed record TelemetryPayload
     public float Accuracy { get; init; }
     public string? ControlState { get; init; }
     public float Latency { get; init; }
+    public float Frequency { get; init; }
 }

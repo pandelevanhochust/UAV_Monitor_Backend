@@ -18,4 +18,5 @@ public readonly record struct LogPacket
     public required float Accuracy { get; init; }       // 0.0–1.0 confidence score
     public string? ControlState { get; init; }          // "Controlled" | "Autonomous" | null
     public required float Latency { get; init; }          // Latency in ms
+    public required float Frequency { get; init; }        // Signal frequency in MHz
 }

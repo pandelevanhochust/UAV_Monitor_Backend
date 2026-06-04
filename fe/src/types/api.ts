@@ -61,6 +61,7 @@ export interface RadarLog {
   controlState: string | null;
   accuracy: number;
   latency: number;
+  frequency: number;
 }
 
 /** Matches C# PaginatedLogsDto(Items, Page, PageSize, TotalCount) */

@@ -78,7 +78,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
         var offset = (page - 1) * pageSize;
 
         var dataSql = $@"
-            SELECT device_id, timestamp, status, detected, drone_type, accuracy, control_state, latency
+            SELECT device_id, timestamp, status, detected, drone_type, accuracy, control_state, latency, frequency
             FROM radar_logs
             {whereClause}
             ORDER BY timestamp DESC
@@ -101,8 +101,8 @@ public sealed class ClickHouseLogRepository : ILogRepository
                 Detected: reader.GetBoolean(3),
                 DroneType: reader.GetString(4),
                 Accuracy: reader.GetFloat(5),
-                ControlState: reader.IsDBNull(6) ? null : reader.GetString(6),
-                Latency: reader.GetFloat(7)
+                Latency: reader.GetFloat(7),
+                Frequency: reader.GetFloat(8)
             ));
         }
 

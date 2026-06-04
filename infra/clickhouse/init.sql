@@ -21,7 +21,8 @@ CREATE TABLE IF NOT EXISTS uav_logs.radar_logs
     drone_type     LowCardinality(String),
     accuracy       Float32,
     control_state  LowCardinality(Nullable(String)),
-    latency        Float32
+    latency        Float32,
+    frequency      Float32
 )
 ENGINE = MergeTree()
 PARTITION BY toYYYYMM(timestamp)

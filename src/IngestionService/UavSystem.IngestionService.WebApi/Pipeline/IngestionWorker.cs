@@ -236,7 +236,8 @@ public sealed class IngestionWorker : BackgroundService
                 p.DroneType,
                 p.Accuracy,
                 p.ControlState ?? string.Empty,
-                p.Latency
+                p.Latency,
+                p.Frequency
             });
 
             await bulkCopy.InitAsync();
