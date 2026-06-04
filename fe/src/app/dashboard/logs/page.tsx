@@ -22,20 +22,32 @@ const { RangePicker } = DatePicker;
 
 export default function LogsPage() {
   const { devices, isLoading: devicesLoading } = useDevices();
+  // ── Pending filter state (user edits these freely) ──────────────────────
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [detectedOnly, setDetectedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 50;
 
-  const startTime = dateRange?.[0]?.toISOString() ?? null;
-  const endTime = dateRange?.[1]?.toISOString() ?? null;
+  // ── Committed filter state (drives the actual SWR fetch) ─────────────────
+  const [appliedDeviceId, setAppliedDeviceId] = useState<number | null>(null);
+  const [appliedStartTime, setAppliedStartTime] = useState<string | null>(null);
+  const [appliedEndTime, setAppliedEndTime] = useState<string | null>(null);
+  const [appliedDetectedOnly, setAppliedDetectedOnly] = useState(false);
+
+  const handleApplyFilters = () => {
+    setAppliedDeviceId(selectedDeviceId);
+    setAppliedStartTime(dateRange?.[0]?.toISOString() ?? null);
+    setAppliedEndTime(dateRange?.[1]?.toISOString() ?? null);
+    setAppliedDetectedOnly(detectedOnly);
+    setPage(1); // always reset to page 1 when filters change
+  };
 
   const { logs, metadata, isLoading, isError, error, mutate } = useLogs({
-    deviceId: selectedDeviceId,
-    startTime,
-    endTime,
-    detectedOnly,
+    deviceId: appliedDeviceId,
+    startTime: appliedStartTime,
+    endTime: appliedEndTime,
+    detectedOnly: appliedDetectedOnly,
     page,
     limit: PAGE_SIZE,
   });
@@ -143,21 +155,32 @@ export default function LogsPage() {
       <div className={styles.filterBar}>
         <span className={styles.filterLabel}>Device:</span>
         <Select id="logs-device-select" className={styles.deviceSelect} placeholder="Select a radar device..."
-          options={deviceOptions} loading={devicesLoading} onChange={(v) => { setSelectedDeviceId(v); setPage(1); }}
+          options={deviceOptions} loading={devicesLoading}
+          onChange={(v) => { setSelectedDeviceId(v ?? null); }}
           allowClear onClear={() => setSelectedDeviceId(null)} showSearch
           filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())} />
         <div className={styles.filterDivider} />
         <span className={styles.filterLabel}>Time Range:</span>
         <RangePicker id="logs-date-range" className={styles.rangePicker} showTime
-          onChange={(val) => { setDateRange(val); setPage(1); }} />
+          onChange={(val) => { setDateRange(val); }} />
         <div className={styles.filterDivider} />
         <span className={styles.filterLabel}>Detections only:</span>
         <Switch id="logs-detected-toggle" size="small" checked={detectedOnly}
-          onChange={(v) => { setDetectedOnly(v); setPage(1); }} />
+          onChange={(v) => { setDetectedOnly(v); }} />
         <div className={styles.filterSpacer} />
+        <Button
+          id="logs-apply-filters"
+          type="primary"
+          size="small"
+          icon={<FilterOutlined />}
+          onClick={handleApplyFilters}
+          disabled={!selectedDeviceId}
+        >
+          Apply
+        </Button>
         <Tooltip title="Refresh">
           <Button id="logs-refresh" size="small" icon={<ReloadOutlined />} onClick={() => mutate()}
-            loading={isLoading} disabled={!selectedDeviceId} />
+            loading={isLoading} disabled={!appliedDeviceId} />
         </Tooltip>
       </div>
 

@@ -43,7 +43,6 @@ export function useLogs({
     apiFetch<PaginatedResponse<RadarLog>>,
     {
       revalidateOnFocus: false,
-      keepPreviousData: true, // Don't flash loading state on page change
     }
   );
 
