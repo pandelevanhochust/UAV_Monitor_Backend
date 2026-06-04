@@ -17,6 +17,7 @@ public interface ILogRepository
         long? deviceId,
         DateTime? from,
         DateTime? to,
+        bool? detected,
         int page,
         int pageSize,
         CancellationToken ct = default);
@@ -30,6 +31,7 @@ public interface ILogRepository
         long? deviceIdFilter,
         DateTime? from,
         DateTime? to,
+        bool? detected,
         int page,
         int pageSize,
         CancellationToken ct = default);

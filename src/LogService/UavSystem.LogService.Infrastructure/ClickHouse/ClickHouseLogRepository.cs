@@ -25,10 +25,10 @@ public sealed class ClickHouseLogRepository : ILogRepository
     }
 
     public async Task<PaginatedLogsDto> GetPaginatedLogsAsync(
-        long? deviceId, DateTime? from, DateTime? to,
+        long? deviceId, DateTime? from, DateTime? to, bool? detected,
         int page, int pageSize, CancellationToken ct = default)
     {
-        var (whereClause, parameters) = BuildWhereClause(deviceId, from, to);
+        var (whereClause, parameters) = BuildWhereClause(deviceId, from, to, detected);
 
         var totalCount = await GetTotalCountAsync(whereClause, parameters, ct);
         var items = await GetPageAsync(whereClause, parameters, page, pageSize, ct);
@@ -38,7 +38,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
 
     public async Task<PaginatedLogsDto> GetPaginatedLogsByDeviceIdsAsync(
         IReadOnlyList<long> deviceIds, long? deviceIdFilter,
-        DateTime? from, DateTime? to,
+        DateTime? from, DateTime? to, bool? detected,
         int page, int pageSize, CancellationToken ct = default)
     {
         if (deviceIds.Count == 0)
@@ -49,7 +49,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
             return new PaginatedLogsDto(Array.Empty<LogEntryDto>(), page, pageSize, 0);
 
         var (whereClause, parameters) = BuildScopedWhereClause(
-            deviceIds, deviceIdFilter, from, to);
+            deviceIds, deviceIdFilter, from, to, detected);
 
         var totalCount = await GetTotalCountAsync(whereClause, parameters, ct);
         var items = await GetPageAsync(whereClause, parameters, page, pageSize, ct);
@@ -110,7 +110,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
     }
 
     private static (string WhereClause, Dictionary<string, object> Parameters) BuildWhereClause(
-        long? deviceId, DateTime? from, DateTime? to)
+        long? deviceId, DateTime? from, DateTime? to, bool? detected)
     {
         var conditions = new List<string>();
         var parameters = new Dictionary<string, object>();
@@ -133,6 +133,12 @@ public sealed class ClickHouseLogRepository : ILogRepository
             parameters["to_ts"] = to.Value;
         }
 
+        if (detected.HasValue)
+        {
+            conditions.Add("detected = {detected:UInt8}");
+            parameters["detected"] = detected.Value ? (byte)1 : (byte)0;
+        }
+
         var whereClause = conditions.Count > 0
             ? "WHERE " + string.Join(" AND ", conditions)
             : string.Empty;
@@ -142,7 +148,7 @@ public sealed class ClickHouseLogRepository : ILogRepository
 
     private static (string WhereClause, Dictionary<string, object> Parameters) BuildScopedWhereClause(
         IReadOnlyList<long> deviceIds, long? deviceIdFilter,
-        DateTime? from, DateTime? to)
+        DateTime? from, DateTime? to, bool? detected)
     {
         var conditions = new List<string>();
         var parameters = new Dictionary<string, object>();
@@ -170,6 +176,12 @@ public sealed class ClickHouseLogRepository : ILogRepository
         {
             conditions.Add("timestamp <= {to_ts:DateTime}");
             parameters["to_ts"] = to.Value;
+        }
+
+        if (detected.HasValue)
+        {
+            conditions.Add("detected = {detected:UInt8}");
+            parameters["detected"] = detected.Value ? (byte)1 : (byte)0;
         }
 
         var whereClause = "WHERE " + string.Join(" AND ", conditions);

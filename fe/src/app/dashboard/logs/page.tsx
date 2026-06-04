@@ -98,9 +98,20 @@ export default function LogsPage() {
       width: 85,
       sorter: (a, b) => a.accuracy - b.accuracy,
       render: (acc: number) => {
-        const pct = Math.round(acc * 100);
-        const color = pct >= 90 ? 'var(--uav-status-online)' : pct >= 70 ? 'var(--uav-status-error)' : 'var(--uav-status-offline)';
+        const pct = (acc * 100).toFixed(2);
+        const color = Number(pct) >= 90 ? 'var(--uav-status-online)' : Number(pct) >= 70 ? 'var(--uav-status-error)' : 'var(--uav-status-offline)';
         return <span className={styles.accuracyCell} style={{ color }}>{pct}%</span>;
+      },
+    },
+    {
+      title: 'Latency',
+      dataIndex: 'latency',
+      key: 'latency',
+      width: 90,
+      sorter: (a, b) => a.latency - b.latency,
+      render: (ms: number) => {
+        const color = ms <= 20 ? 'var(--uav-status-online)' : ms <= 50 ? 'var(--uav-status-error)' : 'var(--uav-status-offline)';
+        return <span className={styles.accuracyCell} style={{ color }}>{ms.toFixed(1)} ms</span>;
       },
     },
     {

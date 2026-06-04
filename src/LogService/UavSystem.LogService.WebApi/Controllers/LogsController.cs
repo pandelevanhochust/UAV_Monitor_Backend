@@ -44,6 +44,7 @@ public sealed class LogsController : ControllerBase
         [FromQuery] long? device_id,
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to,
+        [FromQuery] bool? detected,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 50,
         CancellationToken ct = default)
@@ -52,7 +53,7 @@ public sealed class LogsController : ControllerBase
         if (string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase))
         {
             var result = await _sender.Send(
-                new GetPaginatedLogsQuery(device_id, from, to, page, pageSize), ct);
+                new GetPaginatedLogsQuery(device_id, from, to, detected, page, pageSize), ct);
             return Ok(result);
         }
 
@@ -87,7 +88,7 @@ public sealed class LogsController : ControllerBase
 
             var result = await _sender.Send(
                 new GetScopedPaginatedLogsQuery(
-                    allowedDeviceIds, device_id, from, to, page, pageSize), ct);
+                    allowedDeviceIds, device_id, from, to, detected, page, pageSize), ct);
 
             return Ok(result);
         }

@@ -14,6 +14,7 @@ public sealed record GetPaginatedLogsQuery(
     long? DeviceId,
     DateTime? From,
     DateTime? To,
+    bool? Detected,
     int Page = 1,
     int PageSize = 50
 ) : IRequest<PaginatedLogsDto>;
@@ -40,6 +41,7 @@ public sealed class GetPaginatedLogsQueryHandler
             request.DeviceId,
             request.From,
             request.To,
+            request.Detected,
             page,
             pageSize,
             cancellationToken);
@@ -55,6 +57,7 @@ public sealed record GetScopedPaginatedLogsQuery(
     long? DeviceIdFilter,
     DateTime? From,
     DateTime? To,
+    bool? Detected,
     int Page = 1,
     int PageSize = 50
 ) : IRequest<PaginatedLogsDto>;
@@ -81,6 +84,7 @@ public sealed class GetScopedPaginatedLogsQueryHandler
             request.DeviceIdFilter,
             request.From,
             request.To,
+            request.Detected,
             page,
             pageSize,
             cancellationToken);
