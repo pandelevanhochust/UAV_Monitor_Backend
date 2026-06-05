@@ -1,1 +1,0 @@
-CREATE DATABASE uav_logs UUID '1b9337be-8794-4846-92c2-bcb5bce78348' ENGINE = Atomic
