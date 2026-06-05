@@ -80,3 +80,8 @@ services:
         paths:
           - /ws/alerts
         strip_path: false
+        protocols:
+          - http
+          - https
+          - ws
+          - wss

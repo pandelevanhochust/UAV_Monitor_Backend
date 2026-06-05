@@ -28,6 +28,19 @@ builder.Services.AddSignalR(options =>
     options.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
 });
 
+// ── CORS — required for SignalR negotiate (browser cross-origin) ──────────────
+// SignalR requires AllowCredentials() + explicit origins (wildcard not allowed).
+// The browser connects from http://localhost:3000 → Kong on :80 → AlertService.
+var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
+    ?? "http://localhost:3000,http://localhost,http://localhost:80")
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+builder.Services.AddCors(opts => opts.AddDefaultPolicy(p => p
+    .WithOrigins(allowedOrigins)
+    .AllowAnyHeader()
+    .AllowAnyMethod()
+    .AllowCredentials()));
+
 // ── Redis (reverse-lookup: device:meta:{id} → monitor_id) ────────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
@@ -79,6 +92,8 @@ if (app.Environment.IsDevelopment())
 }
 
 // ── Map SignalR Hub (matches Kong path: /ws/alerts) ──────────────────────────
+// UseCors() must come before MapHub() — SignalR negotiate is an HTTP POST.
+app.UseCors();
 app.MapHub<AlertHub>("/ws/alerts");
 app.MapControllers();
 
