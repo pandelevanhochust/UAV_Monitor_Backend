@@ -80,8 +80,24 @@ services:
         paths:
           - /ws/alerts
         strip_path: false
-        protocols:
-          - http
-          - https
-          - ws
-          - wss
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - http://localhost:3000
+              methods:
+                - GET
+                - POST
+                - OPTIONS
+              headers:
+                - Accept
+                - Authorization
+                - Content-Type
+                - Keep-Alive
+                - User-Agent
+                - X-Requested-With
+                - X-SignalR-User-Agent
+              exposed_headers:
+                - X-SignalR-User-Agent
+              credentials: true
+              preflight_continue: false

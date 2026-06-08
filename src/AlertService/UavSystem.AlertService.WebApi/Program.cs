@@ -29,8 +29,6 @@ builder.Services.AddSignalR(options =>
 });
 
 // ── CORS — required for SignalR negotiate (browser cross-origin) ──────────────
-// SignalR requires AllowCredentials() + explicit origins (wildcard not allowed).
-// The browser connects from http://localhost:3000 → Kong on :80 → AlertService.
 var allowedOrigins = (Environment.GetEnvironmentVariable("CORS_ORIGINS")
     ?? "http://localhost:3000,http://localhost,http://localhost:80")
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -44,9 +42,24 @@ builder.Services.AddCors(opts => opts.AddDefaultPolicy(p => p
 // ── Redis (reverse-lookup: device:meta:{id} → monitor_id) ────────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
-                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
-    return ConnectionMultiplexer.Connect(connStr);
+    // 1. Pull individual environment pieces cleanly
+    var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST") ?? "redis";
+    var redisPort = Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379";
+    var redisPassword = Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? "";
+
+    // 2. Build programmatic configuration options instead of a messy raw string
+    var options = new ConfigurationOptions
+    {
+        EndPoints = { { redisHost, int.Parse(redisPort) } },
+        Password = string.IsNullOrEmpty(redisPassword) ? null : redisPassword,
+        
+        // 🎯 THE CRITICAL FIXES:
+        AbortOnConnectFail = false,  // Do NOT crash the .NET app if Redis is still booting
+        ConnectRetry = 5,            // Try connecting 5 times before failing
+        ConnectTimeout = 5000        // Give it a 5-second window per attempt
+    };
+
+    return ConnectionMultiplexer.Connect(options);
 });
 
 // ── RabbitMQ (raw client — NO MassTransit) ───────────────────────────────────
