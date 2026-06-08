@@ -1,0 +1,280 @@
+---
+# ============================================================================
+# NETWORK POLICIES — Enforce least-privilege inter-service communication
+# ============================================================================
+
+# Default deny all ingress (block everything not explicitly allowed)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: uav-default-deny-ingress
+  namespace: uav-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# Allow Kong to receive external traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kong-external
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: kong
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector: {}  # Allow from any namespace (external traffic)
+      ports:
+        - protocol: TCP
+          port: 8000  # Proxy
+        - protocol: TCP
+          port: 8001  # Admin
+
+---
+# Allow Kong to talk to all microservices
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-kong-to-services
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: kong
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}  # Allow to any pod in namespace
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 8082
+        - protocol: TCP
+          port: 8083
+        - protocol: TCP
+          port: 8084
+
+---
+# Allow userservice to receive traffic from Kong
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-userservice-ingress
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: userservice
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kong
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 9080
+
+---
+# Allow deviceservice to receive traffic from Kong and to call UserService gRPC
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-deviceservice-ingress
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: deviceservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kong
+      ports:
+        - protocol: TCP
+          port: 8081
+        - protocol: TCP
+          port: 9081
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ingestionservice
+      ports:
+        - protocol: TCP
+          port: 9081
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: userservice
+      ports:
+        - protocol: TCP
+          port: 9080
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - podSelector:
+            matchLabels:
+              app: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+
+---
+# Allow ingestionservice to receive traffic from Kong and call DeviceService
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingestionservice-ingress
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: ingestionservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kong
+      ports:
+        - protocol: TCP
+          port: 8082
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: deviceservice
+      ports:
+        - protocol: TCP
+          port: 9081
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app: clickhouse
+      ports:
+        - protocol: TCP
+          port: 8123
+        - protocol: TCP
+          port: 9000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672
+
+---
+# Allow logservice to receive traffic from Kong and call UserService
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-logservice-ingress
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: logservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kong
+      ports:
+        - protocol: TCP
+          port: 8083
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: userservice
+      ports:
+        - protocol: TCP
+          port: 9080
+    - to:
+        - podSelector:
+            matchLabels:
+              app: clickhouse
+      ports:
+        - protocol: TCP
+          port: 8123
+
+---
+# Allow alertservice to receive traffic from Kong and call Redis + RabbitMQ
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-alertservice-ingress
+  namespace: uav-system
+spec:
+  podSelector:
+    matchLabels:
+      app: alertservice
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: kong
+      ports:
+        - protocol: TCP
+          port: 8084
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    - to:
+        - podSelector:
+            matchLabels:
+              app: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 5672

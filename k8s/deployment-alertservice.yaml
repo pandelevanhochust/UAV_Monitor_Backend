@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertservice
+  namespace: uav-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: alertservice
+  template:
+    metadata:
+      labels:
+        app: alertservice
+    spec:
+      containers:
+        - name: alertservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/alertservice:latest
+          ports:
+            - containerPort: 8084
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8084
+            initialDelaySeconds: 10
+            periodSeconds: 10

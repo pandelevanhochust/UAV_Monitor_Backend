@@ -1,0 +1,361 @@
+---
+# ============================================================================
+# RABBITMQ — StatefulSet with clustering + persistence (HA broker)
+# ============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+  namespace: uav-system
+data:
+  rabbitmq.conf: |
+    cluster_formation.peer_discovery_backend = k8s
+    cluster_formation.k8s.host = kubernetes.default.svc.cluster.local
+    cluster_formation.k8s.address_type = hostname
+    cluster_formation.node_cleanup.interval = 10
+    cluster_formation.node_cleanup.only_log_warning = true
+    cluster_name = uav-rabbitmq
+    management.tcp.port = 15672
+    management.load_definitions = /etc/rabbitmq/definitions.json
+  definitions.json: |
+    {
+      "vhosts": [
+        {
+          "name": "/"
+        }
+      ],
+      "users": [
+        {
+          "name": "guest",
+          "password": "guest",
+          "tags": "administrator"
+        }
+      ],
+      "permissions": [
+        {
+          "user": "guest",
+          "vhost": "/",
+          "configure": ".*",
+          "write": ".*",
+          "read": ".*"
+        }
+      ],
+      "exchanges": [
+        {
+          "name": "uav.events",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false
+        }
+      ],
+      "queues": [
+        {
+          "name": "q.alert.realtime",
+          "vhost": "/",
+          "durable": true,
+          "arguments": {
+            "x-queue-mode": "default"
+          }
+        },
+        {
+          "name": "q.telemetry.analytics",
+          "vhost": "/",
+          "durable": true,
+          "arguments": {
+            "x-queue-mode": "lazy"
+          }
+        },
+        {
+          "name": "q.status.changes",
+          "vhost": "/",
+          "durable": true
+        }
+      ],
+      "bindings": [
+        {
+          "source": "uav.events",
+          "destination": "q.alert.realtime",
+          "destination_type": "queue",
+          "routing_key": "device.*.detection.critical",
+          "vhost": "/"
+        },
+        {
+          "source": "uav.events",
+          "destination": "q.telemetry.analytics",
+          "destination_type": "queue",
+          "routing_key": "device.#",
+          "vhost": "/"
+        },
+        {
+          "source": "uav.events",
+          "destination": "q.status.changes",
+          "destination_type": "queue",
+          "routing_key": "device.*.status.changed",
+          "vhost": "/"
+        }
+      ]
+    }
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: uav-system
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  selector:
+    app: rabbitmq
+  ports:
+    - port: 5672
+      targetPort: 5672
+      name: amqp
+    - port: 15672
+      targetPort: 15672
+      name: management
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: uav-system
+  labels:
+    app: rabbitmq
+spec:
+  serviceName: rabbitmq
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - rabbitmq
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3.13-management-alpine
+          ports:
+            - containerPort: 5672
+              name: amqp
+            - containerPort: 15672
+              name: management
+            - containerPort: 25672
+              name: clustering
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: RABBITMQ_DEFAULT_USER
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: RABBITMQ_DEFAULT_PASS
+            - name: RABBITMQ_DEFAULT_VHOST
+              value: "/"
+            - name: RABBITMQ_ERLANG_COOKIE
+              value: "REPLACEME_ERLANG_COOKIE_SECRET"
+          volumeMounts:
+            - name: rabbitmq-data
+              mountPath: /var/lib/rabbitmq
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - rabbitmq-diagnostics -q ping
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - rabbitmq-diagnostics -q ping
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
+      volumes:
+        - name: rabbitmq-config
+          configMap:
+            name: rabbitmq-config
+  volumeClaimTemplates:
+    - metadata:
+        name: rabbitmq-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "do-block-storage"  # DigitalOcean block storage class
+        resources:
+          requests:
+            storage: 10Gi
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: rabbitmq
+
+---
+# ============================================================================
+# CLICKHOUSE — StatefulSet with replication + persistence
+# ============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: uav-system
+  labels:
+    app: clickhouse
+spec:
+  clusterIP: None
+  selector:
+    app: clickhouse
+  ports:
+    - port: 8123
+      targetPort: 8123
+      name: http
+    - port: 9000
+      targetPort: 9000
+      name: native
+    - port: 9009
+      targetPort: 9009
+      name: replica
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: uav-system
+  labels:
+    app: clickhouse
+spec:
+  serviceName: clickhouse
+  replicas: 3
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - clickhouse
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24
+          ports:
+            - containerPort: 8123
+              name: http
+            - containerPort: 9000
+              name: native
+            - containerPort: 9009
+              name: replica
+          env:
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: CLICKHOUSE_USER
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: CLICKHOUSE_PASSWORD
+            - name: CLICKHOUSE_DB
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: CLICKHOUSE_DB
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          volumeMounts:
+            - name: clickhouse-data
+              mountPath: /var/lib/clickhouse
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: clickhouse-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "do-block-storage"
+        resources:
+          requests:
+            storage: 50Gi  # ClickHouse stores columnar data — needs significant space
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clickhouse-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: clickhouse

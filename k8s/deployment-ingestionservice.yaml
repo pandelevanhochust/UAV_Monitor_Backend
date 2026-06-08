@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestionservice
+  namespace: uav-system
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ingestionservice
+  template:
+    metadata:
+      labels:
+        app: ingestionservice
+    spec:
+      containers:
+        - name: ingestionservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/ingestionservice:latest
+          ports:
+            - containerPort: 8082
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 10

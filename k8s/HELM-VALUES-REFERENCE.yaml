@@ -1,0 +1,66 @@
+# Helm Values for DigitalOcean Managed Databases
+# 
+# These are optional — use if deploying Postgres + Redis via Helm instead of
+# DO managed services. Included for reference.
+
+---
+# PostgreSQL Helm Chart (Bitnami)
+# helm repo add bitnami https://charts.bitnami.com/bitnami
+# helm install postgresql bitnami/postgresql -n uav-system -f postgres-values.yaml
+postgresql:
+  auth:
+    username: uav_admin
+    password: REPLACEME_POSTGRES_PASSWORD
+    database: uav_system
+  primary:
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: do-block-storage
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    nodeSelector:
+      node.kubernetes.io/instance-type: s-2vcpu-4gb
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      enabled: true
+      size: 100Gi
+      storageClass: do-block-storage
+
+---
+# Redis Helm Chart (Bitnami)
+# helm repo add bitnami https://charts.bitnami.com/bitnami
+# helm install redis bitnami/redis -n uav-system -f redis-values.yaml
+redis:
+  auth:
+    enabled: true
+    password: REPLACEME_REDIS_PASSWORD
+  architecture: replication
+  replica:
+    replicaCount: 2
+  master:
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: do-block-storage
+  replica:
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: do-block-storage
+  sentinel:
+    enabled: true
+    quorum: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi

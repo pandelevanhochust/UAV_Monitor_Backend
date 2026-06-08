@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logservice
+  namespace: uav-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logservice
+  template:
+    metadata:
+      labels:
+        app: logservice
+    spec:
+      containers:
+        - name: logservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/logservice:latest
+          ports:
+            - containerPort: 8083
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 10

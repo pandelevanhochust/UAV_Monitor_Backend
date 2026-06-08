@@ -1,0 +1,672 @@
+---
+# ============================================================================
+# USERSERVICE — Auth & JWT validation (2+ replicas, horizontal auto-scaling)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: userservice
+  namespace: uav-system
+  labels:
+    app: userservice
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: userservice
+  template:
+    metadata:
+      labels:
+        app: userservice
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - userservice
+                topologyKey: kubernetes.io/hostname
+      serviceAccountName: uav-app
+      containers:
+        - name: userservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/userservice:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9080
+              name: grpc
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: userservice
+  namespace: uav-system
+  labels:
+    app: userservice
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for DNS-based service discovery
+  selector:
+    app: userservice
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http
+    - port: 9080
+      targetPort: 9080
+      name: grpc
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: userservice-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: userservice
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: userservice-hpa
+  namespace: uav-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: userservice
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+---
+# ============================================================================
+# DEVICESERVICE — Device CRUD + Redis sync (2+ replicas)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deviceservice
+  namespace: uav-system
+  labels:
+    app: deviceservice
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: deviceservice
+  template:
+    metadata:
+      labels:
+        app: deviceservice
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - deviceservice
+                topologyKey: kubernetes.io/hostname
+      serviceAccountName: uav-app
+      containers:
+        - name: deviceservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/deviceservice:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+              name: http
+            - containerPort: 9081
+              name: grpc
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_URLS
+              value: "http://+:8081"
+            - name: USERSERVICE_GRPC_URL
+              value: "http://userservice:9080"
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deviceservice
+  namespace: uav-system
+  labels:
+    app: deviceservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: deviceservice
+  ports:
+    - port: 8081
+      targetPort: 8081
+      name: http
+    - port: 9081
+      targetPort: 9081
+      name: grpc
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: deviceservice-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: deviceservice
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: deviceservice-hpa
+  namespace: uav-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: deviceservice
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+
+---
+# ============================================================================
+# INGESTIONSERVICE — High-throughput telemetry (3+ replicas for scale)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestionservice
+  namespace: uav-system
+  labels:
+    app: ingestionservice
+spec:
+  replicas: 4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ingestionservice
+  template:
+    metadata:
+      labels:
+        app: ingestionservice
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - ingestionservice
+                topologyKey: kubernetes.io/hostname
+      serviceAccountName: uav-app
+      containers:
+        - name: ingestionservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/ingestionservice:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+              name: http
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_URLS
+              value: "http://+:8082"
+            - name: DEVICE_SERVICE_GRPC_URL
+              value: "http://deviceservice:9081"
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8082
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 300m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingestionservice
+  namespace: uav-system
+  labels:
+    app: ingestionservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: ingestionservice
+  ports:
+    - port: 8082
+      targetPort: 8082
+      name: http
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ingestionservice-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 3
+  selector:
+    matchLabels:
+      app: ingestionservice
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ingestionservice-hpa
+  namespace: uav-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ingestionservice
+  minReplicas: 4
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+
+---
+# ============================================================================
+# LOGSERVICE — Paginated log reads (2+ replicas)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logservice
+  namespace: uav-system
+  labels:
+    app: logservice
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: logservice
+  template:
+    metadata:
+      labels:
+        app: logservice
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - logservice
+                topologyKey: kubernetes.io/hostname
+      serviceAccountName: uav-app
+      containers:
+        - name: logservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/logservice:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8083
+              name: http
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_URLS
+              value: "http://+:8083"
+            - name: USER_SERVICE_GRPC_URL
+              value: "http://userservice:9080"
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8083
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logservice
+  namespace: uav-system
+  labels:
+    app: logservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: logservice
+  ports:
+    - port: 8083
+      targetPort: 8083
+      name: http
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: logservice-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: logservice
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: logservice-hpa
+  namespace: uav-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: logservice
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+
+---
+# ============================================================================
+# ALERTSERVICE — Real-time WebSocket alerts (2+ replicas)
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertservice
+  namespace: uav-system
+  labels:
+    app: alertservice
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: alertservice
+  template:
+    metadata:
+      labels:
+        app: alertservice
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - alertservice
+                topologyKey: kubernetes.io/hostname
+      serviceAccountName: uav-app
+      containers:
+        - name: alertservice
+          image: registry.digitalocean.com/REPLACE_REGISTRY/alertservice:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8084
+              name: http
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Production
+            - name: ASPNETCORE_URLS
+              value: "http://+:8084"
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8084
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8084
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertservice
+  namespace: uav-system
+  labels:
+    app: alertservice
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: alertservice
+  ports:
+    - port: 8084
+      targetPort: 8084
+      name: http
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: alertservice-pdb
+  namespace: uav-system
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: alertservice
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: alertservice-hpa
+  namespace: uav-system
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: alertservice
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
