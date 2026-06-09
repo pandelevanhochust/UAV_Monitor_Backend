@@ -1,0 +1,11 @@
+##############################################################################
+# 00-namespace.yaml
+# All UAV system resources live in a single dedicated namespace.
+##############################################################################
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: uav-system
+  labels:
+    name: uav-system
+
