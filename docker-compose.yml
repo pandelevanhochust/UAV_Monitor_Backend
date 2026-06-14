@@ -123,6 +123,8 @@ services:
       --requirepass ${REDIS_PASSWORD}
       --notify-keyspace-events Ex
       --appendonly yes
+      --maxmemory 200mb
+      --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
     networks:
