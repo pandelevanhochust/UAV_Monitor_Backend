@@ -103,8 +103,8 @@ public sealed class IngestionWorker : BackgroundService
                 // ── Step 3: ClickHouse Batch Write ───────────────────────
                 await WriteToClickHouseAsync(batch, stoppingToken);
 
-                // ── Step 4: Alert Dispatch ────────────────────────────────
-                await DispatchAlertsAsync(batch, stoppingToken);
+                // Note: Alert dispatch (Step 4) has been moved to TelemetryController
+                // for immediate WebSocket delivery without waiting for batch completion.
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -252,69 +252,10 @@ public sealed class IngestionWorker : BackgroundService
         }
     }
 
-    /// <summary>
-    /// Step 4: For any packet where Detected == 1, serialize a DroneDetectedEvent
-    /// and publish to RabbitMQ exchange "uav.events" with routing key
-    /// "device.{id}.detection.critical" using Publisher Confirms.
-    /// </summary>
-    private Task DispatchAlertsAsync(List<LogPacket> batch, CancellationToken ct)
-    {
-        var detections = batch.Where(p => p.Detected == 1).ToList();
-
-        if (detections.Count == 0)
-            return Task.CompletedTask;
-
-        foreach (var packet in detections)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            try
-            {
-                var @event = new DroneDetectedEvent(
-                    DeviceId: packet.DeviceId,
-                    Timestamp: packet.Timestamp,
-                    Location: string.Empty,  // Populated from Redis meta at alert service
-                    DroneType: packet.DroneType,
-                    ControlState: packet.ControlState,
-                    Accuracy: packet.Accuracy
-                );
-
-                var body = JsonSerializer.SerializeToUtf8Bytes(@event, new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
-
-                var properties = _rabbitChannel.CreateBasicProperties();
-                properties.ContentType = "application/json";
-                properties.DeliveryMode = 2; // Persistent
-                properties.MessageId = Guid.NewGuid().ToString();
-                properties.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-                properties.Type = nameof(DroneDetectedEvent);
-
-                var routingKey = $"device.{packet.DeviceId}.detection.critical";
-
-                _rabbitChannel.BasicPublish(
-                    exchange: ExchangeName,
-                    routingKey: routingKey,
-                    mandatory: true,
-                    basicProperties: properties,
-                    body: body);
-
-                _rabbitChannel.WaitForConfirmsOrDie(TimeSpan.FromSeconds(5));
-
-                _logger.LogInformation(
-                    "Alert dispatched: drone detected by device {DeviceId} (type={DroneType}, accuracy={Accuracy:F2})",
-                    packet.DeviceId, packet.DroneType, packet.Accuracy);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogError(ex,
-                    "Failed to dispatch alert for device {DeviceId}", packet.DeviceId);
-            }
-        }
-
-        return Task.CompletedTask;
-    }
+    // DispatchAlertsAsync has been removed.
+    // Alert dispatch is now handled immediately in TelemetryController
+    // so that SignalR WebSocket notifications fire within ~10-20ms of
+    // the drone sending telemetry, without waiting for the batch pipeline.
 
     public override void Dispose()
     {
