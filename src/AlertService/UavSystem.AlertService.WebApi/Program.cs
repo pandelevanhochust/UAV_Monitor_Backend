@@ -31,8 +31,13 @@ builder.Services.AddSignalR(options =>
 // ── Redis (reverse-lookup: device:meta:{id} → monitor_id) ────────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
-                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
+    var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
+
+    // Env vars always take priority (Docker/K8s). appsettings is local dev fallback only.
+    var connStr = !string.IsNullOrEmpty(redisHost)
+        ? $"{redisHost}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false"
+        : builder.Configuration.GetConnectionString("RedisConnection") ?? "127.0.0.1:6379,abortConnect=false";
+
     return ConnectionMultiplexer.Connect(connStr);
 });
 
