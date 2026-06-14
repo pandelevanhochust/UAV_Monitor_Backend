@@ -36,10 +36,31 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         _redis = connectionMultiplexer.GetDatabase();
         _logger = logger;
 
-        _rabbitConnection = rabbitConnectionFactory.CreateConnection();
+        // Retry with exponential backoff — RabbitMQ may still be booting on first start.
+        _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
         _rabbitChannel = _rabbitConnection.CreateModel();
         _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
-        _rabbitChannel.ConfirmSelect(); // Publisher confirms for reliability
+        _rabbitChannel.ConfirmSelect();
+    }
+
+    private static IConnection ConnectWithRetry(IConnectionFactory factory, int maxAttempts = 5)
+    {
+        Exception? lastEx = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return factory.CreateConnection();
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                lastEx = ex;
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s, 16s
+                Thread.Sleep(delay);
+            }
+        }
+        throw new InvalidOperationException(
+            $"[TelemetryController] Failed to connect to RabbitMQ after {maxAttempts} attempts.", lastEx);
     }
 
     /// <summary>

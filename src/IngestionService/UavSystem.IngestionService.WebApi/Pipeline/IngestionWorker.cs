@@ -56,10 +56,31 @@ public sealed class IngestionWorker : BackgroundService
         _logger = logger;
 
         // RabbitMQ: durable topic exchange + Publisher Confirms
-        _rabbitConnection = rabbitConnectionFactory.CreateConnection();
+        // Retry with exponential backoff — RabbitMQ may still be booting on first start.
+        _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
         _rabbitChannel = _rabbitConnection.CreateModel();
         _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
         _rabbitChannel.ConfirmSelect();
+    }
+
+    private IConnection ConnectWithRetry(IConnectionFactory factory, int maxAttempts = 5)
+    {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return factory.CreateConnection();
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s, 16s
+                _logger.LogWarning(
+                    "[IngestionWorker] RabbitMQ connection attempt {Attempt}/{Max} failed: {Message}. Retrying in {Delay}s...",
+                    attempt, maxAttempts, ex.Message, delay.TotalSeconds);
+                Thread.Sleep(delay);
+            }
+        }
+        throw new InvalidOperationException($"[IngestionWorker] Failed to connect to RabbitMQ after {maxAttempts} attempts.");
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
