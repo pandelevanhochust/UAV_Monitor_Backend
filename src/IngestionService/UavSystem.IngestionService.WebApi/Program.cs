@@ -25,7 +25,7 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── Channel<LogPacket> Pipeline (bounded, backpressure-aware) ────────────────
-var channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(10_000)
+var channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(200_000)
 {
     FullMode = BoundedChannelFullMode.DropWrite, // Backpressure: TryWrite returns false
     SingleReader = true,  // Single IngestionWorker consumer
