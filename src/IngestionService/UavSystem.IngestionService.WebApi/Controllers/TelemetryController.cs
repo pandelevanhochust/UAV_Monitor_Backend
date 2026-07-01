@@ -21,8 +21,8 @@ public sealed class TelemetryController : ControllerBase, IDisposable
     // ── Dedicated RabbitMQ connection for immediate alert dispatch ────────────
     // Intentionally separate from the IngestionWorker's connection so that
     // alert publishing is never blocked by the batch pipeline.
-    private readonly IConnection _rabbitConnection;
-    private readonly IModel _rabbitChannel;
+    // private readonly IConnection _rabbitConnection;
+    // private readonly IModel _rabbitChannel;
 
     // IModel (RabbitMQ channel) is NOT thread-safe. Multiple concurrent HTTP threads
     // calling BasicPublish on the same channel causes corruption under high RPS.
@@ -40,9 +40,9 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         _channelWriter = channelWriter;
         _redis = connectionMultiplexer.GetDatabase();
         _logger = logger;
-        _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
-        _rabbitChannel = _rabbitConnection.CreateModel();
-        _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
+        // _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
+        // _rabbitChannel = _rabbitConnection.CreateModel();
+        // _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
     }
 
     private static IConnection ConnectWithRetry(IConnectionFactory factory, int maxAttempts = 5)
@@ -87,10 +87,10 @@ public sealed class TelemetryController : ControllerBase, IDisposable
             return Unauthorized(new { error = "Missing X-Device-API-Key header." });
         }
 
-        // if (payload.DeviceId <= 0)
-        // {
-        //     return BadRequest(new { error = $"Invalid device_id. {payload.DeviceId}" });
-        // }
+        if (payload.DeviceId <= 0)
+        {
+            return BadRequest(new { error = $"Invalid device_id. {payload.DeviceId}" });
+        }
 
         // // ── API Key Verification — Redis Cache First, BCrypt on Miss ─────────
         // //
@@ -101,12 +101,6 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         // //   1. Check Redis for a cached validation token (TTL = 5 min)
         // //      → Cache HIT  : skip BCrypt entirely (~2ms Redis lookup)
         // //      → Cache MISS : run BCrypt once, then cache the result
-        // //
-        // // Security properties preserved:
-        // //   - First request always BCrypt-verified (no bypass)
-        // //   - Key rotation propagates within 5 minutes (TTL expires)
-        // //   - Cache key includes a hash of the raw API key so a stolen device ID
-        // //     alone cannot forge a cache hit without the correct key
 
         // var metaKey    = RedisKeys.DeviceMeta(payload.DeviceId);
         // var cacheKey   = $"apikey:validated:{payload.DeviceId}:{apiKey[..Math.Min(8, apiKey.Length)]}";
@@ -222,10 +216,10 @@ public sealed class TelemetryController : ControllerBase, IDisposable
 
     public void Dispose()
     {
-        _rabbitChannel?.Close();
-        _rabbitChannel?.Dispose();
-        _rabbitConnection?.Close();
-        _rabbitConnection?.Dispose();
+        // _rabbitChannel?.Close();
+        // _rabbitChannel?.Dispose();
+        // _rabbitConnection?.Close();
+        // _rabbitConnection?.Dispose();
     }
 }
 
