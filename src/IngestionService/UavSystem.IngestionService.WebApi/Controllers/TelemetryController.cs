@@ -216,7 +216,7 @@ public sealed class TelemetryController : ControllerBase, IDisposable
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { error = "Ingestion pipeline is at capacity. Retry later." });
         }
-
+        _logger.LogInformation("Packet queued for device {DeviceId}", payload.DeviceId);
         return Accepted(new { device_id = payload.DeviceId, status = "queued" });
     }
 
