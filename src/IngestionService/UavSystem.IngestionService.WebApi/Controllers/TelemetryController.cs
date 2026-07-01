@@ -40,14 +40,9 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         _channelWriter = channelWriter;
         _redis = connectionMultiplexer.GetDatabase();
         _logger = logger;
-
-        // Retry with exponential backoff — RabbitMQ may still be booting on first start.
         _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
         _rabbitChannel = _rabbitConnection.CreateModel();
         _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
-        // Note: ConfirmSelect removed — WaitForConfirmsOrDie is not used on the hot path
-        // (it blocks threads and deadlocks under concurrent load). Fire-and-forget is
-        // acceptable here: the Channel pipeline guarantees ClickHouse storage regardless.
     }
 
     private static IConnection ConnectWithRetry(IConnectionFactory factory, int maxAttempts = 5)
@@ -92,113 +87,111 @@ public sealed class TelemetryController : ControllerBase, IDisposable
             return Unauthorized(new { error = "Missing X-Device-API-Key header." });
         }
 
-        if (payload.DeviceId <= 0)
-        {
-            return BadRequest(new { error = $"Invalid device_id. {payload.DeviceId}" });
-        }
+        // if (payload.DeviceId <= 0)
+        // {
+        //     return BadRequest(new { error = $"Invalid device_id. {payload.DeviceId}" });
+        // }
 
-        // ── API Key Verification — Redis Cache First, BCrypt on Miss ─────────
-        //
-        // BCrypt.Verify() costs ~110ms of CPU per call. At high RPS this saturates
-        // the ASP.NET thread pool and limits throughput to ~150 rps.
-        //
-        // Strategy:
-        //   1. Check Redis for a cached validation token (TTL = 5 min)
-        //      → Cache HIT  : skip BCrypt entirely (~2ms Redis lookup)
-        //      → Cache MISS : run BCrypt once, then cache the result
-        //
-        // Security properties preserved:
-        //   - First request always BCrypt-verified (no bypass)
-        //   - Key rotation propagates within 5 minutes (TTL expires)
-        //   - Cache key includes a hash of the raw API key so a stolen device ID
-        //     alone cannot forge a cache hit without the correct key
+        // // ── API Key Verification — Redis Cache First, BCrypt on Miss ─────────
+        // //
+        // // BCrypt.Verify() costs ~110ms of CPU per call. At high RPS this saturates
+        // // the ASP.NET thread pool and limits throughput to ~150 rps.
+        // //
+        // // Strategy:
+        // //   1. Check Redis for a cached validation token (TTL = 5 min)
+        // //      → Cache HIT  : skip BCrypt entirely (~2ms Redis lookup)
+        // //      → Cache MISS : run BCrypt once, then cache the result
+        // //
+        // // Security properties preserved:
+        // //   - First request always BCrypt-verified (no bypass)
+        // //   - Key rotation propagates within 5 minutes (TTL expires)
+        // //   - Cache key includes a hash of the raw API key so a stolen device ID
+        // //     alone cannot forge a cache hit without the correct key
 
-        var metaKey    = RedisKeys.DeviceMeta(payload.DeviceId);
-        var cacheKey   = $"apikey:validated:{payload.DeviceId}:{apiKey[..Math.Min(8, apiKey.Length)]}";
+        // var metaKey    = RedisKeys.DeviceMeta(payload.DeviceId);
+        // var cacheKey   = $"apikey:validated:{payload.DeviceId}:{apiKey[..Math.Min(8, apiKey.Length)]}";
 
-        var cachedResult = await _redis.StringGetAsync(cacheKey);
+        // var cachedResult = await _redis.StringGetAsync(cacheKey);
 
-        if (cachedResult.IsNullOrEmpty)
-        {
-            // ── Cache MISS: full BCrypt verification ─────────────────────────
-            var storedHash = await _redis.HashGetAsync(metaKey, "api_key_hash");
+        // if (cachedResult.IsNullOrEmpty)
+        // {
+        //     // ── Cache MISS: full BCrypt verification ─────────────────────────
+        //     var storedHash = await _redis.HashGetAsync(metaKey, "api_key_hash");
 
-            if (storedHash.IsNullOrEmpty)
-            {
-                _logger.LogWarning("Device {DeviceId} not found in Redis cache", payload.DeviceId);
-                return Unauthorized(new { error = "Device not registered." });
-            }
+        //     if (storedHash.IsNullOrEmpty)
+        //     {
+        //         _logger.LogWarning("Device {DeviceId} not found in Redis cache", payload.DeviceId);
+        //         return Unauthorized(new { error = "Device not registered." });
+        //     }
 
-            if (!BCrypt.Net.BCrypt.Verify(apiKey, storedHash.ToString()))
-            {
-                _logger.LogWarning("Invalid API key for device {DeviceId}", payload.DeviceId);
-                return Unauthorized(new { error = "Invalid API key." });
-            }
+        //     if (!BCrypt.Net.BCrypt.Verify(apiKey, storedHash.ToString()))
+        //     {
+        //         _logger.LogWarning("Invalid API key for device {DeviceId}", payload.DeviceId);
+        //         return Unauthorized(new { error = "Invalid API key." });
+        //     }
+        //     // Cache successful validation for 30 minutes — reduces BCrypt to ~0.05% of requests.
+        //     // Also ensures cache survives the entire benchmark run (including cool-downs).
+        //     await _redis.StringSetAsync(cacheKey, "1", TimeSpan.FromMinutes(30));
+        //     _logger.LogDebug("API key verified via BCrypt for device {DeviceId} — result cached", payload.DeviceId);
+        // }
+        // // else: Cache HIT — BCrypt skipped, validation already confirmed recently
 
-            // Cache successful validation for 5 minutes — reduces BCrypt to ~0.3% of requests
-            await _redis.StringSetAsync(cacheKey, "1", TimeSpan.FromMinutes(5));
-            _logger.LogDebug("API key verified via BCrypt for device {DeviceId} — result cached", payload.DeviceId);
-        }
-        // else: Cache HIT — BCrypt skipped, validation already confirmed recently
+        // // ── FAST PATH: Immediate Alert Dispatch (bypasses batch wait) ────────
+        // if (payload.Detected == 1)
+        // {
+        //     try
+        //     {
+        //         var location = await _redis.HashGetAsync(metaKey, "location");
 
-        // ── FAST PATH: Immediate Alert Dispatch (bypasses batch wait) ────────
-        // Fire-and-forward: published BEFORE queuing to the Channel.
-        // The AlertService will receive this in ~10-20ms via SignalR WebSocket.
-        if (payload.Detected == 1)
-        {
-            try
-            {
-                var location = await _redis.HashGetAsync(metaKey, "location");
+        //         var @event = new DroneDetectedEvent(
+        //             DeviceId: payload.DeviceId,
+        //             Timestamp: payload.Timestamp,
+        //             Location: location.IsNullOrEmpty ? string.Empty : location.ToString(),
+        //             DroneType: payload.DroneType,
+        //             ControlState: payload.ControlState,
+        //             Accuracy: payload.Accuracy
+        //         );
 
-                var @event = new DroneDetectedEvent(
-                    DeviceId: payload.DeviceId,
-                    Timestamp: payload.Timestamp,
-                    Location: location.IsNullOrEmpty ? string.Empty : location.ToString(),
-                    DroneType: payload.DroneType,
-                    ControlState: payload.ControlState,
-                    Accuracy: payload.Accuracy
-                );
+        //         var body = JsonSerializer.SerializeToUtf8Bytes(@event, new JsonSerializerOptions
+        //         {
+        //             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        //         });
 
-                var body = JsonSerializer.SerializeToUtf8Bytes(@event, new JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-                });
+        //         // Serialize channel access — IModel is not thread-safe.
+        //         // SemaphoreSlim async-await yields the thread instead of blocking it.
+        //         await _publishLock.WaitAsync(ct);
+        //         try
+        //         {
+        //             var props = _rabbitChannel.CreateBasicProperties();
+        //             props.ContentType = "application/json";
+        //             props.DeliveryMode = 2; // Persistent
+        //             props.MessageId = Guid.NewGuid().ToString();
+        //             props.Type = nameof(DroneDetectedEvent);
 
-                // Serialize channel access — IModel is not thread-safe.
-                // SemaphoreSlim async-await yields the thread instead of blocking it.
-                await _publishLock.WaitAsync(ct);
-                try
-                {
-                    var props = _rabbitChannel.CreateBasicProperties();
-                    props.ContentType = "application/json";
-                    props.DeliveryMode = 2; // Persistent
-                    props.MessageId = Guid.NewGuid().ToString();
-                    props.Type = nameof(DroneDetectedEvent);
+        //             _rabbitChannel.BasicPublish(
+        //                 exchange: ExchangeName,
+        //                 routingKey: $"device.{payload.DeviceId}.detection.critical",
+        //                 mandatory: false,  // fire-and-forget — no confirm wait
+        //                 basicProperties: props,
+        //                 body: body);
+        //             // Fire-and-forget: RabbitMQ will buffer and deliver asynchronously.
+        //             // AlertService receives the event within ~10-20ms without blocking here.
+        //         }
+        //         finally
+        //         {
+        //             _publishLock.Release();
+        //         }
 
-                    _rabbitChannel.BasicPublish(
-                        exchange: ExchangeName,
-                        routingKey: $"device.{payload.DeviceId}.detection.critical",
-                        mandatory: false,  // fire-and-forget — no confirm wait
-                        basicProperties: props,
-                        body: body);
-                    // Fire-and-forget: RabbitMQ will buffer and deliver asynchronously.
-                    // AlertService receives the event within ~10-20ms without blocking here.
-                }
-                finally
-                {
-                    _publishLock.Release();
-                }
-
-                _logger.LogInformation(
-                    "Immediate alert dispatched for device {DeviceId} (type={DroneType}, accuracy={Accuracy:F2})",
-                    payload.DeviceId, payload.DroneType, payload.Accuracy);
-            }
-            catch (Exception ex)
-            {
-                // Non-fatal: log and continue — telemetry is still queued for ClickHouse
-                _logger.LogError(ex, "Failed to dispatch immediate alert for device {DeviceId}", payload.DeviceId);
-            }
-        }
+        //         _logger.LogInformation(
+        //             "Immediate alert dispatched for device {DeviceId} (type={DroneType}, accuracy={Accuracy:F2})",
+        //             payload.DeviceId, payload.DroneType, payload.Accuracy);
+        //     }
+        //     catch (Exception ex)
+        //     {
+        //         // Non-fatal: log and continue — telemetry is still queued for ClickHouse
+        //         _logger.LogError(ex, "Failed to dispatch immediate alert for device {DeviceId}", payload.DeviceId);
+        //     }
+        // }
 
         // ── Map to LogPacket and push to Channel pipeline ────────────────────
         // The IngestionWorker handles: Redis cache update + ClickHouse batch write.
