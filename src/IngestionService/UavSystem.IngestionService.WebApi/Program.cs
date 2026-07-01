@@ -21,14 +21,6 @@ builder.Host.UseSerilog((context, config) =>
 // ── Kestrel: Single-port HTTP (telemetry ingestion only, no gRPC server) ─────
 builder.WebHost.ConfigureKestrel(options =>
 {
-    // Raise connection limits for high-throughput benchmarks and production scale.
-    // Default: MaxConcurrentConnections = null (unlimited but OS-bound ~1024).
-    // At 1k+ rps with 5s timeout, we can have 5,000 concurrent connections open.
-    options.Limits.MaxConcurrentConnections         = 10_000;
-    options.Limits.MaxConcurrentUpgradedConnections = 10_000;
-    options.Limits.KeepAliveTimeout                 = TimeSpan.FromSeconds(120);
-    options.Limits.RequestHeadersTimeout            = TimeSpan.FromSeconds(10);
-
     options.ListenAnyIP(8082, o => o.Protocols = HttpProtocols.Http1AndHttp2);
 });
 
