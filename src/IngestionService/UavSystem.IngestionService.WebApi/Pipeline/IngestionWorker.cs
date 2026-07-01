@@ -23,8 +23,8 @@ public sealed class IngestionWorker : BackgroundService
     private readonly InternalDeviceService.InternalDeviceServiceClient _deviceGrpcClient;
     private readonly ILogger<IngestionWorker> _logger;
 
-    private const int BatchSize = 100;
-    private const int BatchTimeoutMs = 500;
+    private const int BatchSize = 1000;
+    private const int BatchTimeoutMs = 1000;
 
     public IngestionWorker(
         ChannelReader<LogPacket> channelReader,
