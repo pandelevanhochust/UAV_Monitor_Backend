@@ -15,29 +15,14 @@ using UavSystem.Shared.Infrastructure.Caching;
 
 namespace UavSystem.IngestionService.WebApi.Pipeline;
 
-/// <summary>
-/// Async BackgroundService pulling batches from the Channel&lt;LogPacket&gt;
-/// pipeline and executing the 4-step processing sequence:
-///
-///   Step 1 — Validation / State Delta → gRPC state transition or heartbeat refresh
-///   Step 2 — Real-Time Cache → Redis device:latest_log:{id} hash update
-///   Step 3 — ClickHouse Write → batch column insertion via ClickHouseColumnWriter
-///   Step 4 — Alert Dispatch → RabbitMQ publish if Detected == 1
-///
-/// FLAT PIPELINE architecture: No call-stack layers (no Clean Architecture
-/// overhead). Optimized for throughput — direct Redis/ClickHouse/RabbitMQ access.
-/// </summary>
 public sealed class IngestionWorker : BackgroundService
 {
     private readonly ChannelReader<LogPacket> _channelReader;
     private readonly IConnectionMultiplexer _redis;
     private readonly ClickHouseConnection _clickHouseConnection;
     private readonly InternalDeviceService.InternalDeviceServiceClient _deviceGrpcClient;
-    private readonly IConnection _rabbitConnection;
-    private readonly IModel _rabbitChannel;
     private readonly ILogger<IngestionWorker> _logger;
 
-    private const string ExchangeName = "uav.events";
     private const int BatchSize = 100;
     private const int BatchTimeoutMs = 500;
 
@@ -46,7 +31,6 @@ public sealed class IngestionWorker : BackgroundService
         IConnectionMultiplexer redis,
         ClickHouseConnection clickHouseConnection,
         InternalDeviceService.InternalDeviceServiceClient deviceGrpcClient,
-        IConnectionFactory rabbitConnectionFactory,
         ILogger<IngestionWorker> logger)
     {
         _channelReader = channelReader;
@@ -54,78 +38,53 @@ public sealed class IngestionWorker : BackgroundService
         _clickHouseConnection = clickHouseConnection;
         _deviceGrpcClient = deviceGrpcClient;
         _logger = logger;
-
-        // RabbitMQ: durable topic exchange + Publisher Confirms
-        // Retry with exponential backoff — RabbitMQ may still be booting on first start.
-        _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
-        _rabbitChannel = _rabbitConnection.CreateModel();
-        _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
-        _rabbitChannel.ConfirmSelect();
-    }
-
-    private IConnection ConnectWithRetry(IConnectionFactory factory, int maxAttempts = 5)
-    {
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                return factory.CreateConnection();
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s, 16s
-                _logger.LogWarning(
-                    "[IngestionWorker] RabbitMQ connection attempt {Attempt}/{Max} failed: {Message}. Retrying in {Delay}s...",
-                    attempt, maxAttempts, ex.Message, delay.TotalSeconds);
-                Thread.Sleep(delay);
-            }
-        }
-        throw new InvalidOperationException($"[IngestionWorker] Failed to connect to RabbitMQ after {maxAttempts} attempts.");
+        
+        // Ghi chú: Kết nối RabbitMQ đã được gỡ bỏ hoàn toàn khỏi Worker 
+        // do Fast Path đã chuyển ra ngoài TelemetryController ✓
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("IngestionWorker started — pulling from Channel pipeline");
+        _logger.LogInformation("[IngestionWorker] Pipeline activated on 16-Core Node - Pulling telemetry batches");
+
+        var batch = new List<LogPacket>(BatchSize);
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var batch = new List<LogPacket>(BatchSize);
+            batch.Clear();
+            var timeoutTask = Task.Delay(BatchTimeoutMs, stoppingToken);
 
             try
             {
-                // Collect a batch (up to BatchSize items or BatchTimeoutMs)
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                cts.CancelAfter(BatchTimeoutMs);
+                // Tối ưu hóa vòng lặp gom khối (Batching) sử dụng Task.WhenAny 
+                // Thay thế hoàn toàn việc khởi tạo CTS lãng phí tài nguyên bộ nhớ Heap
+                while (batch.Count < BatchSize)
+                {
+                    var readTask = _channelReader.ReadAsync(stoppingToken).AsTask();
+                    var completedTask = await Task.WhenAny(readTask, timeoutTask);
 
-                try
-                {
-                    while (batch.Count < BatchSize)
+                    if (completedTask == timeoutTask)
                     {
-                        var packet = await _channelReader.ReadAsync(cts.Token);
-                        batch.Add(packet);
+                        // Đã quá thời gian chờ (BatchTimeoutMs) -> Tiến hành xử lý những gói đang có
+                        break;
                     }
-                }
-                catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
-                {
-                    // Batch timeout elapsed — process what we have
+
+                    batch.Add(await readTask);
                 }
 
                 if (batch.Count == 0)
                     continue;
 
-                _logger.LogDebug("Processing batch of {Count} packets", batch.Count);
+                _logger.LogDebug("Processing parallelized pipeline batch of {Count} packets", batch.Count);
 
-                // ── Step 1: Validation / State Delta + Heartbeat ─────────
-                await ProcessStateDeltasAsync(batch, stoppingToken);
+                // Kích hoạt thực thi đồng thời cả Step 1 và Step 2 để tận dụng tối đa kiến trúc đa nhân của CPU
+                var step1Task = ProcessStateDeltasAsync(batch, stoppingToken);
+                var step2Task = UpdateLatestLogsAsync(batch, stoppingToken);
 
-                // ── Step 2: Real-Time Cache Update ───────────────────────
-                await UpdateLatestLogsAsync(batch, stoppingToken);
+                await Task.WhenAll(step1Task, step2Task);
 
-                // ── Step 3: ClickHouse Batch Write ───────────────────────
+                // Step 3: Ghi dữ liệu khối dạng cột xuống ClickHouse
                 await WriteToClickHouseAsync(batch, stoppingToken);
-
-                // Note: Alert dispatch (Step 4) has been moved to TelemetryController
-                // for immediate WebSocket delivery without waiting for batch completion.
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -133,108 +92,101 @@ public sealed class IngestionWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing ingestion batch of {Count} packets", batch.Count);
-                // Continue processing — do not crash the pipeline for transient errors
+                _logger.LogError(ex, "Critical failure inside IngestionWorker batch pipeline execution");
             }
         }
-
-        _logger.LogInformation("IngestionWorker shutting down");
     }
 
     /// <summary>
-    /// Step 1: For each packet, compare its Status against cached device status.
-    /// If changed → call DeviceService gRPC to trigger state transition.
-    /// If unchanged → refresh the heartbeat key with 10-minute TTL.
+    /// Step 1 Tối ưu: Chuyển đổi sang gọi gRPC song song song (Fan-Out) 
+    /// Thay thế luồng chạy tuần tự cũ để giải phóng nghẽn mạch I/O mạng.
     /// </summary>
     private async Task ProcessStateDeltasAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
+        var grpcTasks = new List<Task>(batch.Count);
 
-        foreach (var packet in batch)
+        // Tạo Batch Redis lệnh để tối ưu hóa truy vấn RTT mạng
+        var batchRedis = db.CreateBatch();
+        var cacheCheckTasks = batch.Select(packet => new
+        {
+            Packet = packet,
+            MetaKey = RedisKeys.DeviceMeta(packet.DeviceId),
+            StatusTask = batchRedis.HashGetAsync(RedisKeys.DeviceMeta(packet.DeviceId), "status")
+        }).ToList();
+
+        batchRedis.Execute(); // Đẩy toàn bộ lệnh kiểm tra trạng thái tới Redis cùng 1 lúc
+
+        foreach (var ctx in cacheCheckTasks)
         {
             ct.ThrowIfCancellationRequested();
+            var cachedStatus = await ctx.StatusTask;
 
-            try
+            if (!cachedStatus.IsNullOrEmpty &&
+                !string.Equals(cachedStatus.ToString(), ctx.Packet.Status, StringComparison.OrdinalIgnoreCase))
             {
-                var metaKey = RedisKeys.DeviceMeta(packet.DeviceId);
-                var cachedStatus = await db.HashGetAsync(metaKey, "status");
+                _logger.LogInformation("State delta identified for device {DeviceId}: {Cached} -> {Reported}",
+                    ctx.Packet.DeviceId, cachedStatus, ctx.Packet.Status);
 
-                if (!cachedStatus.IsNullOrEmpty &&
-                    !string.Equals(cachedStatus.ToString(), packet.Status, StringComparison.OrdinalIgnoreCase))
+                var grpcRequest = new UpdateDeviceStatusRequest
                 {
-                    // State delta detected → call DeviceService gRPC for formal transition
-                    _logger.LogInformation(
-                        "State delta for device {DeviceId}: {Cached} → {Reported}",
-                        packet.DeviceId, cachedStatus, packet.Status);
+                    DeviceId = ctx.Packet.DeviceId,
+                    NewStatus = ctx.Packet.Status,
+                    Timestamp = Timestamp.FromDateTime(ctx.Packet.Timestamp.ToUniversalTime())
+                };
 
-                    var grpcRequest = new UpdateDeviceStatusRequest
-                    {
-                        DeviceId = packet.DeviceId,
-                        NewStatus = packet.Status,
-                        Timestamp = Timestamp.FromDateTime(packet.Timestamp.ToUniversalTime())
-                    };
-
-                    await _deviceGrpcClient.UpdateDeviceStatusAsync(grpcRequest, cancellationToken: ct);
-                }
-                else
-                {
-                    // No state change — refresh heartbeat with 10-minute rolling lease
-                    var heartbeatKey = RedisKeys.DeviceHeartbeat(packet.DeviceId);
-                    await db.StringSetAsync(heartbeatKey, "active", TimeSpan.FromMinutes(10));
-                }
+                // Kích hoạt lệnh gọi gRPC bất đồng bộ, không đứng đợi tuần tự
+                grpcTasks.Add(_deviceGrpcClient.UpdateDeviceStatusAsync(grpcRequest, cancellationToken: ct).ResponseAsync);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            else
             {
-                _logger.LogWarning(ex,
-                    "Failed state delta check for device {DeviceId}, continuing batch",
-                    packet.DeviceId);
+                var heartbeatKey = RedisKeys.DeviceHeartbeat(ctx.Packet.DeviceId);
+                grpcTasks.Add(db.StringSetAsync(heartbeatKey, "active", TimeSpan.FromMinutes(10)));
             }
+        }
+
+        if (grpcTasks.Count > 0)
+        {
+            await Task.WhenAll(grpcTasks); // Đợi toàn bộ các tác vụ gRPC và Heartbeat mạng hoàn thành đồng thời
         }
     }
 
     /// <summary>
-    /// Step 2: Update the device:latest_log:{id} Redis hash with the most recent
-    /// telemetry data for each device in the batch.
+    /// Step 2 Tối ưu: Áp dụng cơ chế Redis Pipelining (CreateBatch).
+    /// Gộp toàn bộ lệnh HashSet thành 1 gói dữ liệu mạng duy nhất gửi tới Redis Server.
     /// </summary>
-    private async Task UpdateLatestLogsAsync(List<LogPacket> batch, CancellationToken ct)
+    private Task UpdateLatestLogsAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
+        var batchRedis = db.CreateBatch();
 
-        // Group by device — only keep the latest timestamp per device in this batch
         var latestPerDevice = batch
             .GroupBy(p => p.DeviceId)
             .Select(g => g.OrderByDescending(p => p.Timestamp).First());
 
         foreach (var packet in latestPerDevice)
         {
-            ct.ThrowIfCancellationRequested();
+            if (ct.IsCancellationRequested) break;
 
-            try
+            var key = RedisKeys.DeviceLatestLog(packet.DeviceId);
+            var entries = new HashEntry[]
             {
-                var key = RedisKeys.DeviceLatestLog(packet.DeviceId);
-                var entries = new HashEntry[]
-                {
-                    new("timestamp", packet.Timestamp.ToString("O")),
-                    new("detected", packet.Detected.ToString()),
-                    new("drone_type", packet.DroneType),
-                    new("accuracy", packet.Accuracy.ToString("F4")),
-                    new("control_state", packet.ControlState ?? string.Empty)
-                };
+                new("timestamp", packet.Timestamp.ToString("O")),
+                new("detected", packet.Detected.ToString()),
+                new("drone_type", packet.DroneType),
+                new("accuracy", packet.Accuracy.ToString("F4")),
+                new("control_state", packet.ControlState ?? string.Empty)
+            };
 
-                await db.HashSetAsync(key, entries);
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to update latest_log for device {DeviceId}", packet.DeviceId);
-            }
+            _ = batchRedis.HashSetAsync(key, entries); // Gán lệnh ngầm vào pipeline
         }
+
+        batchRedis.Execute(); // Kích nổ xả toàn bộ dữ liệu khối xuống Redis
+        return Task.CompletedTask;
     }
 
     /// <summary>
-    /// Step 3: Batch insert all packets into ClickHouse radar_logs table
-    /// using the efficient ClickHouseColumnWriter API (columnar bulk insert).
-    /// This avoids row-by-row INSERT overhead and maximizes throughput.
+    /// Step 3: Lưu khối dữ liệu dạng cột xuống hạ tầng lưu trữ ClickHouse
     /// </summary>
     private async Task WriteToClickHouseAsync(List<LogPacket> batch, CancellationToken ct)
     {
@@ -253,7 +205,7 @@ public sealed class IngestionWorker : BackgroundService
                 Convert.ToUInt16(p.DeviceId),
                 p.Timestamp,
                 p.Status,
-                p.Detected == 1,  // ClickHouse Bool
+                p.Detected == 1,
                 p.DroneType,
                 p.Accuracy,
                 p.ControlState ?? string.Empty,
@@ -263,27 +215,17 @@ public sealed class IngestionWorker : BackgroundService
 
             await bulkCopy.InitAsync();
             await bulkCopy.WriteToServerAsync(rows, ct);
-
-            _logger.LogDebug("ClickHouse: wrote {Count} rows to radar_logs", batch.Count);
+            _logger.LogDebug("ClickHouse bulk writer complete: {Count} rows integrated", batch.Count);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (Exception ex)
         {
-            _logger.LogError(ex, "ClickHouse batch write failed for {Count} packets", batch.Count);
-            throw; // Propagate to outer catch for retry/alerting
+            _logger.LogError(ex, "Columnar bulk transaction failed for ClickHouse destination target");
+            throw;
         }
     }
 
-    // DispatchAlertsAsync has been removed.
-    // Alert dispatch is now handled immediately in TelemetryController
-    // so that SignalR WebSocket notifications fire within ~10-20ms of
-    // the drone sending telemetry, without waiting for the batch pipeline.
-
     public override void Dispose()
     {
-        _rabbitChannel?.Close();
-        _rabbitChannel?.Dispose();
-        _rabbitConnection?.Close();
-        _rabbitConnection?.Dispose();
         _clickHouseConnection?.Dispose();
         base.Dispose();
     }
