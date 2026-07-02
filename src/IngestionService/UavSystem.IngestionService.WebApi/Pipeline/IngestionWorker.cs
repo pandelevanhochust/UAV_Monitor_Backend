@@ -75,7 +75,15 @@ public sealed class IngestionWorker : BackgroundService
                     }
                     catch (ConsumeException e)
                     {
+                        if (e.Error.Reason.Contains("Unknown topic", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogWarning("Topic 'uav.telemetry.raw' does not exist yet. Waiting for the first telemetry packet to be produced...");
+                            await Task.Delay(2000, stoppingToken);
+                            break;
+                        }
+                        
                         _logger.LogError(e, "Error consuming from Kafka");
+                        await Task.Delay(1000, stoppingToken);
                     }
                 }
 
