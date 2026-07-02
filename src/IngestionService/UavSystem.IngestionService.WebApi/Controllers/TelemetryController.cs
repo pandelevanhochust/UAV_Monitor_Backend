@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using System.Threading.Channels;
+using Confluent.Kafka;
 using Microsoft.AspNetCore.Mvc;
 using RabbitMQ.Client;
 using StackExchange.Redis;
@@ -14,7 +14,7 @@ namespace UavSystem.IngestionService.WebApi.Controllers;
 [Route("api/v1/telemetry")]
 public sealed class TelemetryController : ControllerBase, IDisposable
 {
-    private readonly ChannelWriter<LogPacket> _channelWriter;
+    private readonly IProducer<string, string> _kafkaProducer;
     private readonly IDatabase _redis;
     private readonly ILogger<TelemetryController> _logger;
 
@@ -32,12 +32,12 @@ public sealed class TelemetryController : ControllerBase, IDisposable
     private const string ExchangeName = "uav.events";
 
     public TelemetryController(
-        ChannelWriter<LogPacket> channelWriter,
+        IProducer<string, string> kafkaProducer,
         IConnectionMultiplexer connectionMultiplexer,
         IConnectionFactory rabbitConnectionFactory,
         ILogger<TelemetryController> logger)
     {
-        _channelWriter = channelWriter;
+        _kafkaProducer = kafkaProducer;
         _redis = connectionMultiplexer.GetDatabase();
         _logger = logger;
         // _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
@@ -203,10 +203,19 @@ public sealed class TelemetryController : ControllerBase, IDisposable
             Frequency = payload.Frequency
         };
 
-        if (!_channelWriter.TryWrite(packet))
+        var jsonPacket = JsonSerializer.Serialize(packet);
+
+        try
         {
-            // Channel is full — backpressure scenario
-            _logger.LogWarning("Channel backpressure: dropped packet from device {DeviceId}", payload.DeviceId);
+            await _kafkaProducer.ProduceAsync("uav.telemetry.raw", new Message<string, string>
+            {
+                Key = payload.DeviceId.ToString(),
+                Value = jsonPacket
+            });
+        }
+        catch (ProduceException<string, string> ex)
+        {
+            _logger.LogError(ex, "Failed to deliver telemetry to Kafka for device {DeviceId}", payload.DeviceId);
             return StatusCode(StatusCodes.Status503ServiceUnavailable,
                 new { error = "Ingestion pipeline is at capacity. Retry later." });
         }

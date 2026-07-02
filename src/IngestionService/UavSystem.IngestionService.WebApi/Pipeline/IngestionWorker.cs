@@ -1,6 +1,6 @@
 using System.Text;
 using System.Text.Json;
-using System.Threading.Channels;
+using Confluent.Kafka;
 using ClickHouse.Client.ADO;
 using ClickHouse.Client.Copy;
 using Google.Protobuf.WellKnownTypes;
@@ -17,23 +17,23 @@ namespace UavSystem.IngestionService.WebApi.Pipeline;
 
 public sealed class IngestionWorker : BackgroundService
 {
-    private readonly ChannelReader<LogPacket> _channelReader;
+    private readonly IConsumer<string, string> _kafkaConsumer;
     private readonly IConnectionMultiplexer _redis;
     private readonly ClickHouseConnection _clickHouseConnection;
     private readonly InternalDeviceService.InternalDeviceServiceClient _deviceGrpcClient;
     private readonly ILogger<IngestionWorker> _logger;
 
-    private const int BatchSize = 100;
-    private const int BatchTimeoutMs = 500;
+    private const int BatchSize = 1000;
+    private const int BatchTimeoutMs = 1000;
 
     public IngestionWorker(
-        ChannelReader<LogPacket> channelReader,
+        ConsumerConfig consumerConfig,
         IConnectionMultiplexer redis,
         ClickHouseConnection clickHouseConnection,
         InternalDeviceService.InternalDeviceServiceClient deviceGrpcClient,
         ILogger<IngestionWorker> logger)
     {
-        _channelReader = channelReader;
+        _kafkaConsumer = new ConsumerBuilder<string, string>(consumerConfig).Build();
         _redis = redis;
         _clickHouseConnection = clickHouseConnection;
         _deviceGrpcClient = deviceGrpcClient;
@@ -45,31 +45,38 @@ public sealed class IngestionWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("[IngestionWorker] Pipeline activated on 16-Core Node - Pulling telemetry batches");
+        _logger.LogInformation("[IngestionWorker] Pipeline activated on 16-Core Node - Pulling telemetry batches from Kafka");
 
+        _kafkaConsumer.Subscribe("uav.telemetry.raw");
         var batch = new List<LogPacket>(BatchSize);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             batch.Clear();
-            var timeoutTask = Task.Delay(BatchTimeoutMs, stoppingToken);
 
             try
             {
-                // Tối ưu hóa vòng lặp gom khối (Batching) sử dụng Task.WhenAny 
-                // Thay thế hoàn toàn việc khởi tạo CTS lãng phí tài nguyên bộ nhớ Heap
+                // Batched consume loop using timeout
                 while (batch.Count < BatchSize)
                 {
-                    var readTask = _channelReader.ReadAsync(stoppingToken).AsTask();
-                    var completedTask = await Task.WhenAny(readTask, timeoutTask);
-
-                    if (completedTask == timeoutTask)
+                    try
                     {
-                        // Đã quá thời gian chờ (BatchTimeoutMs) -> Tiến hành xử lý những gói đang có
-                        break;
-                    }
+                        var consumeResult = _kafkaConsumer.Consume(TimeSpan.FromMilliseconds(BatchTimeoutMs));
+                        if (consumeResult == null || consumeResult.IsPartitionEOF)
+                        {
+                            break; // Timeout reached or EOF
+                        }
 
-                    batch.Add(await readTask);
+                        var packet = JsonSerializer.Deserialize<LogPacket>(consumeResult.Message.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (packet != null)
+                        {
+                            batch.Add(packet);
+                        }
+                    }
+                    catch (ConsumeException e)
+                    {
+                        _logger.LogError(e, "Error consuming from Kafka");
+                    }
                 }
 
                 if (batch.Count == 0)
@@ -85,6 +92,9 @@ public sealed class IngestionWorker : BackgroundService
 
                 // Step 3: Ghi dữ liệu khối dạng cột xuống ClickHouse
                 await WriteToClickHouseAsync(batch, stoppingToken);
+
+                // Step 4: Commit offsets back to Kafka only after successful ClickHouse write
+                _kafkaConsumer.Commit();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -95,6 +105,8 @@ public sealed class IngestionWorker : BackgroundService
                 _logger.LogError(ex, "Critical failure inside IngestionWorker batch pipeline execution");
             }
         }
+        
+        _kafkaConsumer.Close();
     }
 
     /// <summary>
@@ -132,7 +144,7 @@ public sealed class IngestionWorker : BackgroundService
                 {
                     DeviceId = ctx.Packet.DeviceId,
                     NewStatus = ctx.Packet.Status,
-                    Timestamp = Timestamp.FromDateTime(ctx.Packet.Timestamp.ToUniversalTime())
+                    Timestamp = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(ctx.Packet.Timestamp.ToUniversalTime())
                 };
 
                 // Kích hoạt lệnh gọi gRPC bất đồng bộ, không đứng đợi tuần tự

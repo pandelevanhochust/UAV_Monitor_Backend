@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using ClickHouse.Client.ADO;
+using Confluent.Kafka;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using RabbitMQ.Client;
@@ -24,16 +25,29 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(8082, o => o.Protocols = HttpProtocols.Http1AndHttp2);
 });
 
-// ── Channel<LogPacket> Pipeline (bounded, backpressure-aware) ────────────────
-var channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(200_000)
+// ── Kafka (Message Broker for Ingestion) ──────────────────────────────────────
+var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
+
+// 1. Register Kafka Producer (used by TelemetryController)
+builder.Services.AddSingleton<IProducer<string, string>>(_ =>
 {
-    FullMode = BoundedChannelFullMode.DropWrite, // Backpressure: TryWrite returns false
-    SingleReader = true,  // Single IngestionWorker consumer
-    SingleWriter = false  // Multiple concurrent HTTP requests
+    var config = new ProducerConfig
+    {
+        BootstrapServers = kafkaBootstrapServers,
+        Acks = Acks.Leader,
+        LingerMs = 5 // Slight delay to increase batching on the producer side
+    };
+    return new ProducerBuilder<string, string>(config).Build();
 });
 
-builder.Services.AddSingleton(channel.Writer);
-builder.Services.AddSingleton(channel.Reader);
+// 2. Register Kafka Consumer Configuration (used by IngestionWorker)
+builder.Services.AddSingleton(new ConsumerConfig
+{
+    BootstrapServers = kafkaBootstrapServers,
+    GroupId = "ingestion-worker-group",
+    AutoOffsetReset = AutoOffsetReset.Earliest,
+    EnableAutoCommit = false // Manual commit after DB insert
+});
 
 // ── Redis (device validation + heartbeat — NEVER PostgreSQL) ─────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
