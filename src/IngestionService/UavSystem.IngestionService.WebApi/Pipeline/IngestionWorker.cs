@@ -40,9 +40,6 @@ public sealed class IngestionWorker : BackgroundService
         _clickHouseConnection = clickHouseConnection;
         _deviceGrpcClient = deviceGrpcClient;
         _logger = logger;
-        
-        // Ghi chú: Kết nối RabbitMQ đã được gỡ bỏ hoàn toàn khỏi Worker 
-        // do Fast Path đã chuyển ra ngoài TelemetryController ✓
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -58,7 +55,6 @@ public sealed class IngestionWorker : BackgroundService
 
             try
             {
-                // Batched consume loop using timeout
                 while (batch.Count < BatchSize)
                 {
                     try
@@ -66,7 +62,7 @@ public sealed class IngestionWorker : BackgroundService
                         var consumeResult = _kafkaConsumer.Consume(TimeSpan.FromMilliseconds(BatchTimeoutMs));
                         if (consumeResult == null || consumeResult.IsPartitionEOF)
                         {
-                            break; // Timeout reached or EOF
+                            break; 
                         }
 
                         var packet = JsonSerializer.Deserialize<LogPacket>(consumeResult.Message.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -94,16 +90,15 @@ public sealed class IngestionWorker : BackgroundService
 
                 _logger.LogDebug("Processing parallelized pipeline batch of {Count} packets", batch.Count);
 
-                // Kích hoạt thực thi đồng thời cả Step 1 và Step 2 để tận dụng tối đa kiến trúc đa nhân của CPU
                 var step1Task = ProcessStateDeltasAsync(batch, stoppingToken);
                 var step2Task = UpdateLatestLogsAsync(batch, stoppingToken);
 
                 await Task.WhenAll(step1Task, step2Task);
 
-                // Step 3: Ghi dữ liệu khối dạng cột xuống ClickHouse
+                // Ghi dữ liệu xuống ClickHouse
                 await WriteToClickHouseAsync(batch, stoppingToken);
 
-                // Step 4: Commit offsets back to Kafka only after successful ClickHouse write
+                // Commit offsets back to Kafka only after successful ClickHouse write
                 _kafkaConsumer.Commit();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -119,10 +114,6 @@ public sealed class IngestionWorker : BackgroundService
         _kafkaConsumer.Close();
     }
 
-    /// <summary>
-    /// Step 1 Tối ưu: Chuyển đổi sang gọi gRPC song song song (Fan-Out) 
-    /// Thay thế luồng chạy tuần tự cũ để giải phóng nghẽn mạch I/O mạng.
-    /// </summary>
     private async Task ProcessStateDeltasAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
@@ -173,10 +164,6 @@ public sealed class IngestionWorker : BackgroundService
         }
     }
 
-    /// <summary>
-    /// Step 2 Tối ưu: Áp dụng cơ chế Redis Pipelining (CreateBatch).
-    /// Gộp toàn bộ lệnh HashSet thành 1 gói dữ liệu mạng duy nhất gửi tới Redis Server.
-    /// </summary>
     private Task UpdateLatestLogsAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
@@ -207,9 +194,6 @@ public sealed class IngestionWorker : BackgroundService
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Step 3: Lưu khối dữ liệu dạng cột xuống hạ tầng lưu trữ ClickHouse
-    /// </summary>
     private async Task WriteToClickHouseAsync(List<LogPacket> batch, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

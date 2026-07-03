@@ -1,13 +1,5 @@
 namespace UavSystem.IngestionService.WebApi.Pipeline.Models;
 
-/// <summary>
-/// Immutable structural record representing a single radar log packet
-/// received from an edge SDR device. Flows through the in-process
-/// Channel&lt;LogPacket&gt; pipeline.
-///
-/// This is the canonical data plane shape — optimized for zero-allocation
-/// deserialization and batch ClickHouse insertion.
-/// </summary>
 public readonly record struct LogPacket
 {
     public required long DeviceId { get; init; }

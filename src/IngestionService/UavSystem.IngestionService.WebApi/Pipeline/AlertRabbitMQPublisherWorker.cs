@@ -6,14 +6,12 @@ using Microsoft.Extensions.Hosting;
 using System.Text.Json; 
 using RabbitMQ.Client; 
 
-// 💡 Đổi dòng using trỏ đúng vào thư mục Models nội bộ hiển thị trong ảnh image_c1c521.png
 using UavSystem.IngestionService.WebApi.Pipeline.Models; 
 
 namespace UavSystem.IngestionService.WebApi.Pipeline
 {
     public class AlertRabbitMQPublisherWorker : BackgroundService
     {
-        // 💡 Đổi sang LogPacket theo đúng cấu trúc của bạn
         private readonly Channel<LogPacket> _alertChannel; 
         private readonly IModel _rabbitChannel; 
 
@@ -25,7 +23,6 @@ namespace UavSystem.IngestionService.WebApi.Pipeline
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Luồng ngầm này liên tục đọc từ RAM Channel cho đến khi app tắt
             await foreach (var payload in _alertChannel.Reader.ReadAllAsync(stoppingToken))
             {
                 try
