@@ -86,53 +86,19 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         [FromHeader(Name = "X-Device-API-Key")] string? apiKey,
         CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return Unauthorized(new { error = "Missing X-Device-API-Key header." });
-        }
-
         if (payload.DeviceId <= 0)
         {
             return BadRequest(new { error = $"Invalid device_id. {payload.DeviceId}" });
         }
 
-        // // ── API Key Verification — Redis Cache First, BCrypt on Miss ─────────
-        // //
-        // // BCrypt.Verify() costs ~110ms of CPU per call. At high RPS this saturates
-        // // the ASP.NET thread pool and limits throughput to ~150 rps.
-        // //
-        // // Strategy:
-        // //   1. Check Redis for a cached validation token (TTL = 5 min)
-        // //      → Cache HIT  : skip BCrypt entirely (~2ms Redis lookup)
-        // //      → Cache MISS : run BCrypt once, then cache the result
+        var metaKey = RedisKeys.DeviceMeta(payload.DeviceId);
+        bool deviceExists = await _redis.KeyExistsAsync(metaKey);
 
-        var metaKey    = RedisKeys.DeviceMeta(payload.DeviceId);
-        var cacheKey   = $"apikey:validated:{payload.DeviceId}:{apiKey[..Math.Min(8, apiKey.Length)]}";
-
-        var cachedResult = await _redis.StringGetAsync(cacheKey);
-
-        if (cachedResult.IsNullOrEmpty)
+        if (!deviceExists)
         {
-            // ── Cache MISS: full BCrypt verification ─────────────────────────
-            var storedHash = await _redis.HashGetAsync(metaKey, "api_key_hash");
-
-            if (storedHash.IsNullOrEmpty)
-            {
-                _logger.LogWarning("Device {DeviceId} not found in Redis cache", payload.DeviceId);
-                return Unauthorized(new { error = "Device not registered." });
-            }
-
-            if (!BCrypt.Net.BCrypt.Verify(apiKey, storedHash.ToString()))
-            {
-                _logger.LogWarning("Invalid API key for device {DeviceId}", payload.DeviceId);
-                return Unauthorized(new { error = "Invalid API key." });
-            }
-            // Cache successful validation for 30 minutes — reduces BCrypt to ~0.05% of requests.
-            // Also ensures cache survives the entire benchmark run (including cool-downs).
-            await _redis.StringSetAsync(cacheKey, "1", TimeSpan.FromMinutes(30));
-            _logger.LogDebug("API key verified via BCrypt for device {DeviceId} — result cached", payload.DeviceId);
+            _logger.LogWarning("Device {DeviceId} not found in Redis cache", payload.DeviceId);
+            return Unauthorized(new { error = "Device not registered." });
         }
-        // // else: Cache HIT — BCrypt skipped, validation already confirmed recently
 
 
         // ── Map to LogPacket and push to Channel pipeline ────────────────────
