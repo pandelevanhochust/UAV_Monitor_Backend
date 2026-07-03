@@ -44,8 +44,6 @@ public sealed class IngestionWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("[IngestionWorker] Pipeline activated on 16-Core Node - Pulling telemetry batches from Kafka");
-
         _kafkaConsumer.Subscribe("uav.telemetry.raw");
         var batch = new List<LogPacket>(BatchSize);
 
@@ -65,7 +63,10 @@ public sealed class IngestionWorker : BackgroundService
                             break; 
                         }
 
-                        var packet = JsonSerializer.Deserialize<LogPacket>(consumeResult.Message.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        var packet = JsonSerializer.Deserialize<LogPacket>(
+                            consumeResult.Message.Value, 
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        
                         if (packet != null)
                         {
                             batch.Add(packet);
@@ -75,12 +76,12 @@ public sealed class IngestionWorker : BackgroundService
                     {
                         if (e.Error.Reason.Contains("Unknown topic", StringComparison.OrdinalIgnoreCase))
                         {
-                            _logger.LogWarning("Topic 'uav.telemetry.raw' does not exist yet. Waiting for the first telemetry packet to be produced...");
+                            _logger.LogWarning("Topic 'uav.telemetry.raw' chưa tồn tại. Đang đợi gói tin đầu tiên...");
                             await Task.Delay(2000, stoppingToken);
                             break;
                         }
                         
-                        _logger.LogError(e, "Error consuming from Kafka");
+                        _logger.LogError(e, "Lỗi kéo tin từ Kafka");
                         await Task.Delay(1000, stoppingToken);
                     }
                 }
@@ -88,17 +89,15 @@ public sealed class IngestionWorker : BackgroundService
                 if (batch.Count == 0)
                     continue;
 
-                _logger.LogDebug("Processing parallelized pipeline batch of {Count} packets", batch.Count);
+                _logger.LogDebug("Đang xử lý song song mẻ đường ống gồm {Count} gói tin", batch.Count);
 
                 var step1Task = ProcessStateDeltasAsync(batch, stoppingToken);
                 var step2Task = UpdateLatestLogsAsync(batch, stoppingToken);
 
                 await Task.WhenAll(step1Task, step2Task);
 
-                // Ghi dữ liệu xuống ClickHouse
                 await WriteToClickHouseAsync(batch, stoppingToken);
 
-                // Commit offsets back to Kafka only after successful ClickHouse write
                 _kafkaConsumer.Commit();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -107,7 +106,7 @@ public sealed class IngestionWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Critical failure inside IngestionWorker batch pipeline execution");
+                _logger.LogError(ex, "Thất bại nghiêm trọng trong vòng lặp tiêu hóa dữ liệu của IngestionWorker");
             }
         }
         
@@ -117,28 +116,34 @@ public sealed class IngestionWorker : BackgroundService
     private async Task ProcessStateDeltasAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var db = _redis.GetDatabase();
-        var grpcTasks = new List<Task>(batch.Count);
+        var grpcTasks = new List<Task>();
 
-        // Tạo Batch Redis lệnh để tối ưu hóa truy vấn RTT mạng
-        var batchRedis = db.CreateBatch();
-        var cacheCheckTasks = batch.Select(packet => new
+        var latestPerDevice = batch
+            .GroupBy(p => p.DeviceId)
+            .Select(g => g.OrderByDescending(p => p.Timestamp).First())
+            .ToList();
+
+        var checkBatch = db.CreateBatch();
+        var cacheCheckTasks = latestPerDevice.Select(packet => new
         {
             Packet = packet,
-            MetaKey = RedisKeys.DeviceMeta(packet.DeviceId),
-            StatusTask = batchRedis.HashGetAsync(RedisKeys.DeviceMeta(packet.DeviceId), "status")
+            StatusTask = checkBatch.HashGetAsync(RedisKeys.DeviceMeta(packet.DeviceId), "status")
         }).ToList();
 
-        batchRedis.Execute(); // Đẩy toàn bộ lệnh kiểm tra trạng thái tới Redis cùng 1 lúc
+        checkBatch.Execute();
+
+        var heartbeatBatch = db.CreateBatch();
 
         foreach (var ctx in cacheCheckTasks)
         {
             ct.ThrowIfCancellationRequested();
-            var cachedStatus = await ctx.StatusTask;
+            
+            var cachedStatus = await ctx.StatusTask; 
 
             if (!cachedStatus.IsNullOrEmpty &&
                 !string.Equals(cachedStatus.ToString(), ctx.Packet.Status, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogInformation("State delta identified for device {DeviceId}: {Cached} -> {Reported}",
+                _logger.LogInformation("Phát hiện thay đổi trạng thái của thiết bị {DeviceId}: {Cached} -> {Reported}",
                     ctx.Packet.DeviceId, cachedStatus, ctx.Packet.Status);
 
                 var grpcRequest = new UpdateDeviceStatusRequest
@@ -148,19 +153,21 @@ public sealed class IngestionWorker : BackgroundService
                     Timestamp = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(ctx.Packet.Timestamp.ToUniversalTime())
                 };
 
-                // Kích hoạt lệnh gọi gRPC bất đồng bộ, không đứng đợi tuần tự
                 grpcTasks.Add(_deviceGrpcClient.UpdateDeviceStatusAsync(grpcRequest, cancellationToken: ct).ResponseAsync);
             }
             else
             {
                 var heartbeatKey = RedisKeys.DeviceHeartbeat(ctx.Packet.DeviceId);
-                grpcTasks.Add(db.StringSetAsync(heartbeatKey, "active", TimeSpan.FromMinutes(10)));
+                _ = heartbeatBatch.HashSetAsync(heartbeatKey, new HashEntry[] { new("state", "active") });
+                _ = heartbeatBatch.KeyExpireAsync(heartbeatKey, TimeSpan.FromMinutes(10));
             }
         }
 
+        heartbeatBatch.Execute();
+
         if (grpcTasks.Count > 0)
         {
-            await Task.WhenAll(grpcTasks); // Đợi toàn bộ các tác vụ gRPC và Heartbeat mạng hoàn thành đồng thời
+            await Task.WhenAll(grpcTasks); 
         }
     }
 
@@ -187,12 +194,13 @@ public sealed class IngestionWorker : BackgroundService
                 new("control_state", packet.ControlState ?? string.Empty)
             };
 
-            _ = batchRedis.HashSetAsync(key, entries); // Gán lệnh ngầm vào pipeline
+            _ = batchRedis.HashSetAsync(key, entries);
         }
 
-        batchRedis.Execute(); // Kích nổ xả toàn bộ dữ liệu khối xuống Redis
+        batchRedis.Execute(); 
         return Task.CompletedTask;
     }
+
 
     private async Task WriteToClickHouseAsync(List<LogPacket> batch, CancellationToken ct)
     {
@@ -221,11 +229,11 @@ public sealed class IngestionWorker : BackgroundService
 
             await bulkCopy.InitAsync();
             await bulkCopy.WriteToServerAsync(rows, ct);
-            _logger.LogDebug("ClickHouse bulk writer complete: {Count} rows integrated", batch.Count);
+            _logger.LogDebug("Hoàn thành bulk write ClickHouse: tích hợp thành công {Count} dòng", batch.Count);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Columnar bulk transaction failed for ClickHouse destination target");
+            _logger.LogError(ex, "Thảm họa ghi dữ liệu cột Bulk Insert xuống ClickHouse thất bại");
             throw;
         }
     }
