@@ -68,10 +68,6 @@ public sealed class StatusChangeConsumer : RabbitMqConsumerBase<DeviceStatusChan
         var userId = monitorId.ToString();
 
         // ── Enrich with location ─────────────────────────────────────────
-        // Thay vì gọi 2 lần HashGetAsync, hãy gọi 1 lần HashGetAsync cho mảng các trường
-        var fields = await db.HashGetAsync(metaKey, new RedisValue[] { "monitor_id", "location" });
-        var monitorId = fields[0];
-        var location = fields[1];
         var payload = new
         {
             message.DeviceId,

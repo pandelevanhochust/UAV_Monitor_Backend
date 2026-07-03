@@ -78,10 +78,6 @@ public sealed class DroneAlertConsumer : RabbitMqConsumerBase<DroneDetectedEvent
         var userId = monitorId.ToString();
 
         // ── Step 2: Enrich with location from Redis metadata ────────────────
-// Thay vì gọi 2 lần HashGetAsync, hãy gọi 1 lần HashGetAsync cho mảng các trường
-        var fields = await db.HashGetAsync(metaKey, new RedisValue[] { "monitor_id", "location" });
-        var monitorId = fields[0];
-        var location = fields[1];
         var enrichedPayload = new
         {
             message.DeviceId,
