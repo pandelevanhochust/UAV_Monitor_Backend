@@ -43,13 +43,12 @@ export function useLogs({
     apiFetch<PaginatedResponse<RadarLog>>,
     {
       revalidateOnFocus: false,
-      keepPreviousData: true, // Don't flash loading state on page change
     }
   );
 
   return {
-    logs: data?.data ?? [],
-    metadata: data?.metadata ?? { total: 0, page: 1, limit },
+    logs: data?.items ?? [],
+    metadata: { total: data?.totalCount ?? 0, page: data?.page ?? 1, limit: data?.pageSize ?? limit },
     isLoading,
     isError: !!error,
     error,
@@ -67,10 +66,10 @@ function buildUrl(
 ): string {
   const params = new URLSearchParams();
   params.set('device_id', String(deviceId));
-  if (startTime) params.set('start_time', startTime);
-  if (endTime) params.set('end_time', endTime);
+  if (startTime) params.set('from', startTime);
+  if (endTime) params.set('to', endTime);
   if (detectedOnly) params.set('detected', 'true');
   if (page) params.set('page', String(page));
-  if (limit) params.set('limit', String(limit));
+  if (limit) params.set('pageSize', String(limit));
   return `/api/proxy/logs?${params.toString()}`;
 }

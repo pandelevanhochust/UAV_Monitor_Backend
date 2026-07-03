@@ -31,12 +31,15 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── Database (PostgreSQL via EF Core) ────────────────────────────────────────
-var connectionString = builder.Configuration.GetConnectionString("PostgresConnection") ?? 
-                       $"Host={Environment.GetEnvironmentVariable("POSTGRES_HOST") ?? "localhost"};" +
-                       $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
-                       $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_DEVICE") ?? "uav_device_db"};" +
-                       $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
-                       $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""}";
+var postgresHost = Environment.GetEnvironmentVariable("POSTGRES_HOST");
+var connectionString = !string.IsNullOrEmpty(postgresHost)
+    ? $"Host={postgresHost};" +
+      $"Port={Environment.GetEnvironmentVariable("POSTGRES_PORT") ?? "5432"};" +
+      $"Database={Environment.GetEnvironmentVariable("POSTGRES_DB_DEVICE") ?? "uav_device_db"};" +
+      $"Username={Environment.GetEnvironmentVariable("POSTGRES_USER") ?? "uav_admin"};" +
+      $"Password={Environment.GetEnvironmentVariable("POSTGRES_PASSWORD") ?? ""};" +
+      "Include Error Detail=true;"
+    : builder.Configuration.GetConnectionString("PostgresConnection");
 
 builder.Services.AddDbContext<DeviceDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -44,28 +47,31 @@ builder.Services.AddDbContext<DeviceDbContext>(options =>
 // ── Redis (StackExchange.Redis — singleton IConnectionMultiplexer) ────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
-                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
+    var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
+    var connStr = !string.IsNullOrEmpty(redisHost)
+        ? $"{redisHost}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false"
+        : builder.Configuration.GetConnectionString("RedisConnection");
     return ConnectionMultiplexer.Connect(connStr);
 });
 
 // ── RabbitMQ (raw RabbitMQ.Client — NO MassTransit) ──────────────────────────
 builder.Services.AddSingleton<IConnectionFactory>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
-    if (!string.IsNullOrEmpty(connStr))
+    var rabbitHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST");
+    if (!string.IsNullOrEmpty(rabbitHost))
     {
-        return new ConnectionFactory { Uri = new Uri(connStr) };
+        return new ConnectionFactory
+        {
+            HostName = rabbitHost,
+            Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
+            UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
+            Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
+            VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
+        };
     }
     
-    return new ConnectionFactory
-    {
-        HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
-        Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
-        UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
-        Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
-        VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
-    };
+    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
+    return new ConnectionFactory { Uri = new Uri(connStr!) };
 });
 
 // ── Dependency Injection ─────────────────────────────────────────────────────

@@ -12,7 +12,8 @@ public sealed record LogEntryDto(
     string DroneType,
     float Accuracy,
     string? ControlState,
-    float Latency
+    float Latency,
+    float Frequency
 );
 
 /// <summary>

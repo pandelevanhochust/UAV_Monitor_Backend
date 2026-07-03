@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS users (
 
 INSERT INTO users (id, username, email, password_hash, role, updated_at)
 VALUES
-    ('1', 'admin', 'toanlv@gmail.com', '$2a$11$kr2nwn5997f5u8JxORm.QePqd91TxqzaVDBWPMU9zMV59xwhng0iq', 'Admin', NOW()),
-    ('2', 'monitor_toan', 'toan.monitor@uav-system.local', '$2a$11$97d9Vcgd7jd8RBJ52l8Al.YkRiHzxmDvR05.TkF9DaTz16pU3uS0i', 'Monitor', NOW()),
-    ('3', 'monitor_hung', 'hung.monitor@uav-system.local', '$2a$11$1ShpIx7rv/I9IGDP8mxE/eCNRsanYsnMzXv/xyT8JZ2a0fGM86WhO', 'Monitor', NOW())
+    ('00000000-0000-0000-0000-000000000001', 'admin', 'toanlv@gmail.com', '$2a$11$kr2nwn5997f5u8JxORm.QePqd91TxqzaVDBWPMU9zMV59xwhng0iq', 'Admin', NOW()),
+    ('00000000-0000-0000-0000-000000000002', 'monitor_toan', 'toan.monitor@uav-system.local', '$2a$11$97d9Vcgd7jd8RBJ52l8Al.YkRiHzxmDvR05.TkF9DaTz16pU3uS0i', 'Monitor', NOW()),
+    ('00000000-0000-0000-0000-000000000003', 'monitor_hung', 'hung.monitor@uav-system.local', '$2a$11$1ShpIx7rv/I9IGDP8mxE/eCNRsanYsnMzXv/xyT8JZ2a0fGM86WhO', 'Monitor', NOW())
 ON CONFLICT (id) DO NOTHING;
 
 -- Create EF Core migration tracking table manually if it doesn't exist so seed works

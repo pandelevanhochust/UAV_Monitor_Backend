@@ -1,0 +1,94 @@
+##############################################################################
+# infra/redis.yaml — StatefulSet with AOF persistence (DR)
+##############################################################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: uav-system
+  labels:
+    app: redis
+    tier: data
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+        tier: data
+    spec:
+      nodeSelector:
+        tier: data
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command:
+            - redis-server
+            - --requirepass
+            - $(REDIS_PASSWORD)
+            - --notify-keyspace-events
+            - Ex
+            - --appendonly
+            - "yes"
+            - --maxmemory
+            - "200mb"
+            - --maxmemory-policy
+            - "allkeys-lru"
+          ports:
+            - containerPort: 6379
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: REDIS_PASSWORD
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-a", "$(REDIS_PASSWORD)", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: uav-system
+  labels:
+    app: redis
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+
+

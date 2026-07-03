@@ -20,3 +20,7 @@ public sealed record RegisterDeviceResponseDto(
     string LocationName,
     string Status
 );
+
+public sealed record AssignMonitorRequestDto(
+    Guid? MonitorId  // null = unassign
+);

@@ -27,8 +27,35 @@ public abstract class RabbitMqPublisherBase : IDisposable
 
     protected RabbitMqPublisherBase(IConnectionFactory connectionFactory, ILogger logger)
     {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _connection = connectionFactory.CreateConnection();
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));;
+
+        // ── Retry connection with exponential backoff ─────────────────────────
+        // RabbitMQ may still be initializing when services start. Without retries,
+        // the constructor throws and the entire service crashes on the first boot.
+        // Max wait: 2+4+8+16+32 = 62 seconds total before giving up.
+        const int maxAttempts = 5;
+        IConnection? connection = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                connection = connectionFactory.CreateConnection();
+                break; // Success — exit retry loop
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s, 16s
+                _logger.LogWarning(
+                    "RabbitMQ connection attempt {Attempt}/{Max} failed: {Message}. Retrying in {Delay}s...",
+                    attempt, maxAttempts, ex.Message, delay.TotalSeconds);
+                Thread.Sleep(delay);
+            }
+        }
+
+        _connection = connection ?? throw new InvalidOperationException(
+            $"Failed to connect to RabbitMQ after {maxAttempts} attempts.");
+
         _channel = _connection.CreateModel();
 
         // Declare durable topic exchange
@@ -44,6 +71,7 @@ public abstract class RabbitMqPublisherBase : IDisposable
 
         _logger.LogInformation("RabbitMQ publisher initialized on exchange '{Exchange}' with Publisher Confirms enabled", ExchangeName);
     }
+
 
     /// <summary>
     /// Publishes an event to the "uav.events" topic exchange with the specified routing key.

@@ -1,0 +1,107 @@
+##############################################################################
+# infra/clickhouse.yaml — StatefulSet with PVC + init.sql ConfigMap
+##############################################################################
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: uav-system
+  labels:
+    app: clickhouse
+    tier: data
+spec:
+  serviceName: clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+        tier: data
+    spec:
+      nodeSelector:
+        tier: data
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24
+          ports:
+            - containerPort: 8123   # HTTP interface
+            - containerPort: 9000   # Native TCP
+          env:
+            - name: CLICKHOUSE_USER
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: CLICKHOUSE_USER
+            - name: CLICKHOUSE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: CLICKHOUSE_PASSWORD
+            - name: CLICKHOUSE_DB
+              valueFrom:
+                secretKeyRef:
+                  name: uav-secrets
+                  key: CLICKHOUSE_DB
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          volumeMounts:
+            - name: clickhouse-data
+              mountPath: /var/lib/clickhouse
+            - name: init-sql
+              mountPath: /docker-entrypoint-initdb.d
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+      volumes:
+        - name: init-sql
+          configMap:
+            name: clickhouse-init
+  volumeClaimTemplates:
+    - metadata:
+        name: clickhouse-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: uav-system
+  labels:
+    app: clickhouse
+spec:
+  clusterIP: None
+  selector:
+    app: clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+    - name: tcp
+      port: 9000
+      targetPort: 9000
+
+

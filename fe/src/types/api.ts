@@ -29,6 +29,15 @@ export interface Device {
   latestLog: LatestDeviceLog | null;
 }
 
+/** Returned by POST /admin/devices/{id}/assign-monitor */
+export interface DeviceDto {
+  deviceId: number;
+  locationName: string;
+  status: DeviceStatus;
+  assignedMonitorId: string | null;
+  updatedAt: string;
+}
+
 export interface LatestDeviceLog {
   timestamp: string;
   detected: boolean;
@@ -45,22 +54,22 @@ export interface LatestDeviceLog {
  */
 export interface RadarLog {
   deviceId: number;
-  timeStamp: string; // ISO 8601 string
-  location: string;
+  timestamp: string; // ISO 8601 string — camelCase from C# 'Timestamp'
   status: string;
   detected: boolean;
   droneType: string | null;
   controlState: string | null;
   accuracy: number;
+  latency: number;
+  frequency: number;
 }
 
+/** Matches C# PaginatedLogsDto(Items, Page, PageSize, TotalCount) */
 export interface PaginatedResponse<T> {
-  metadata: {
-    total: number;
-    page: number;
-    limit: number;
-  };
-  data: T[];
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
 }
 
 // ─── Alert / Detection Event ──────────────────────────────────────────────────
@@ -100,10 +109,10 @@ export interface DeviceStatusChangedEvent {
  */
 export interface AppUser {
   id: string;
-  name: string;
+  username: string;
   email: string;
   role: UserRole;
-  createdAt: string;
+  updatedAt: string;
 }
 
 // ─── Misc ─────────────────────────────────────────────────────────────────────

@@ -6,8 +6,8 @@ import {
   Switch, Tag, Tooltip, Empty, Spin, Alert,
 } from 'antd';
 import {
-  FilterOutlined, ReloadOutlined,
-  UnorderedListOutlined, SearchOutlined,
+  ReloadOutlined,
+  UnorderedListOutlined, SearchOutlined, FilterOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
@@ -43,8 +43,8 @@ export default function LogsPage() {
   const columns: ColumnsType<RadarLog> = [
     {
       title: 'Timestamp',
-      dataIndex: 'timeStamp',
-      key: 'timeStamp',
+      dataIndex: 'timestamp',
+      key: 'timestamp',
       width: 180,
       render: (ts: string) => (
         <span className={styles.timestampCell}>
@@ -60,13 +60,6 @@ export default function LogsPage() {
       render: (id: number) => (
         <Text style={{ fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>#{id}</Text>
       ),
-    },
-    {
-      title: 'Location',
-      dataIndex: 'location',
-      key: 'location',
-      width: 160,
-      render: (loc: string) => <Text style={{ fontSize: 13, fontWeight: 500 }}>{loc}</Text>,
     },
     {
       title: 'Detection',
@@ -105,10 +98,33 @@ export default function LogsPage() {
       width: 85,
       sorter: (a, b) => a.accuracy - b.accuracy,
       render: (acc: number) => {
-        const pct = Math.round(acc * 100);
-        const color = pct >= 90 ? 'var(--uav-status-online)' : pct >= 70 ? 'var(--uav-status-error)' : 'var(--uav-status-offline)';
+        const pct = (acc * 100).toFixed(2);
+        const color = Number(pct) >= 90 ? 'var(--uav-status-online)' : Number(pct) >= 70 ? 'var(--uav-status-error)' : 'var(--uav-status-offline)';
         return <span className={styles.accuracyCell} style={{ color }}>{pct}%</span>;
       },
+    },
+    {
+      title: 'Latency',
+      dataIndex: 'latency',
+      key: 'latency',
+      width: 90,
+      sorter: (a, b) => a.latency - b.latency,
+      render: (ms: number) => {
+        const color = ms <= 20 ? 'var(--uav-status-online)' : ms <= 50 ? 'var(--uav-status-error)' : 'var(--uav-status-offline)';
+        return <span className={styles.accuracyCell} style={{ color }}>{ms.toFixed(1)} ms</span>;
+      },
+    },
+    {
+      title: 'Frequency',
+      dataIndex: 'frequency',
+      key: 'frequency',
+      width: 95,
+      sorter: (a, b) => a.frequency - b.frequency,
+      render: (mhz: number) => (
+        <span style={{ fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: 'var(--uav-text-secondary)' }}>
+          {mhz ? mhz.toFixed(2) + ' MHz' : '—'}
+        </span>
+      ),
     },
     {
       title: 'Status',
@@ -139,12 +155,13 @@ export default function LogsPage() {
       <div className={styles.filterBar}>
         <span className={styles.filterLabel}>Device:</span>
         <Select id="logs-device-select" className={styles.deviceSelect} placeholder="Select a radar device..."
-          options={deviceOptions} loading={devicesLoading} onChange={(v) => { setSelectedDeviceId(v); setPage(1); }}
-          allowClear onClear={() => setSelectedDeviceId(null)} showSearch
+          options={deviceOptions} loading={devicesLoading}
+          onChange={(v) => { setSelectedDeviceId(v ?? null); setPage(1); }}
+          allowClear onClear={() => { setSelectedDeviceId(null); setPage(1); }} showSearch
           filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())} />
         <div className={styles.filterDivider} />
         <span className={styles.filterLabel}>Time Range:</span>
-        <RangePicker id="logs-date-range" className={styles.rangePicker} showTime
+        <RangePicker id="logs-date-range" className={styles.rangePicker} showTime allowClear
           onChange={(val) => { setDateRange(val); setPage(1); }} />
         <div className={styles.filterDivider} />
         <span className={styles.filterLabel}>Detections only:</span>
@@ -166,7 +183,7 @@ export default function LogsPage() {
           </span>
         }>
         <Spin spinning={isLoading}>
-          <Table<RadarLog> dataSource={logs} columns={columns} rowKey={(r) => `${r.deviceId}-${r.timeStamp}`}
+          <Table<RadarLog> dataSource={logs} columns={columns} rowKey={(r) => `${r.deviceId}-${r.timestamp}`}
             size="small" scroll={{ x: 1000 }}
             pagination={{ current: page, pageSize: PAGE_SIZE, total: metadata.total, onChange: setPage, showSizeChanger: false }}
             locale={{

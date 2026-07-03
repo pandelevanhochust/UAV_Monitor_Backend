@@ -32,7 +32,7 @@ public sealed class AdminUsersController : ControllerBase
         CancellationToken ct)
     {
         if (!string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase))
-            return Forbid();
+            return StatusCode(403, new { message = "Admin role required." });
 
         var result = await _sender.Send(command, ct);
         return CreatedAtAction(nameof(GetUsers), new { id = result.Id }, result);
@@ -49,7 +49,7 @@ public sealed class AdminUsersController : ControllerBase
         CancellationToken ct)
     {
         if (!string.Equals(userRole, "Admin", StringComparison.OrdinalIgnoreCase))
-            return Forbid();
+            return StatusCode(403, new { message = "Admin role required." });
 
         var users = await _userRepository.GetAllAsync(ct);
         var dtos = users.Select(u => 

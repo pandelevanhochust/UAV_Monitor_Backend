@@ -41,9 +41,30 @@ public abstract class RabbitMqConsumerBase<T> : BackgroundService where T : clas
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    private IConnection ConnectWithRetry(int maxAttempts = 5)
+    {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return _connectionFactory.CreateConnection();
+            }
+            catch (Exception ex) when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); // 2s, 4s, 8s, 16s
+                _logger.LogWarning(
+                    "[{Consumer}] RabbitMQ connection attempt {Attempt}/{Max} failed: {Message}. Retrying in {Delay}s...",
+                    GetType().Name, attempt, maxAttempts, ex.Message, delay.TotalSeconds);
+                Thread.Sleep(delay);
+            }
+        }
+        throw new InvalidOperationException(
+            $"[{GetType().Name}] Failed to connect to RabbitMQ after {maxAttempts} attempts.");
+    }
+
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _connection = _connectionFactory.CreateConnection();
+        _connection = ConnectWithRetry();
         _channel = _connection.CreateModel();
 
         // Declare Dead Letter Exchange + Queue for poison messages

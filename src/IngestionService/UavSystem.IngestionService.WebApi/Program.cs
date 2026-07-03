@@ -25,7 +25,7 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 // ── Channel<LogPacket> Pipeline (bounded, backpressure-aware) ────────────────
-var channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(10_000)
+var channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(200_000)
 {
     FullMode = BoundedChannelFullMode.DropWrite, // Backpressure: TryWrite returns false
     SingleReader = true,  // Single IngestionWorker consumer
@@ -38,22 +38,26 @@ builder.Services.AddSingleton(channel.Reader);
 // ── Redis (device validation + heartbeat — NEVER PostgreSQL) ─────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RedisConnection") ?? 
-                  $"{Environment.GetEnvironmentVariable("REDIS_HOST") ?? "localhost"}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false";
-    return ConnectionMultiplexer.Connect(connStr);
+    var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
+    var connStr = !string.IsNullOrEmpty(redisHost)
+        ? $"{redisHost}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false"
+        : builder.Configuration.GetConnectionString("RedisConnection");
+    return ConnectionMultiplexer.Connect(connStr!);
 });
 
 // ── ClickHouse (log writes — NEVER PostgreSQL) ──────────────────────────────
 builder.Services.AddSingleton(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("ClickHouseConnection") ??
-                  $"Host={Environment.GetEnvironmentVariable("CLICKHOUSE_HOST") ?? "localhost"};Port={Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123"};Database=uav_logs";
+    var chHost = Environment.GetEnvironmentVariable("CLICKHOUSE_HOST");
+    var connStr = !string.IsNullOrEmpty(chHost)
+        ? $"Host={chHost};Port={Environment.GetEnvironmentVariable("CLICKHOUSE_PORT") ?? "8123"};Username={Environment.GetEnvironmentVariable("CLICKHOUSE_USER") ?? "default"};Password={Environment.GetEnvironmentVariable("CLICKHOUSE_PASSWORD") ?? ""};Database={Environment.GetEnvironmentVariable("CLICKHOUSE_DB") ?? "uav_logs"};"
+        : builder.Configuration.GetConnectionString("ClickHouseConnection");
     return new ClickHouseConnection(connStr);
 });
 
 // ── gRPC Client → DeviceService (state transitions) ─────────────────────────
-var deviceServiceUrl = builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? 
-                       Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? "http://deviceservice:9081";
+var deviceServiceUrl = Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? 
+                       builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? "http://deviceservice:9081";
 
 builder.Services.AddSingleton(_ =>
 {
@@ -64,20 +68,21 @@ builder.Services.AddSingleton(_ =>
 // ── RabbitMQ (alert publishing — raw client, NO MassTransit) ─────────────────
 builder.Services.AddSingleton<IConnectionFactory>(_ =>
 {
-    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
-    if (!string.IsNullOrEmpty(connStr))
+    var rabbitHost = Environment.GetEnvironmentVariable("RABBITMQ_HOST");
+    if (!string.IsNullOrEmpty(rabbitHost))
     {
-        return new ConnectionFactory { Uri = new Uri(connStr) };
+        return new ConnectionFactory
+        {
+            HostName = rabbitHost,
+            Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
+            UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
+            Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
+            VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
+        };
     }
     
-    return new ConnectionFactory
-    {
-        HostName = Environment.GetEnvironmentVariable("RABBITMQ_HOST") ?? "localhost",
-        Port = int.Parse(Environment.GetEnvironmentVariable("RABBITMQ_PORT") ?? "5672"),
-        UserName = Environment.GetEnvironmentVariable("RABBITMQ_USER") ?? "guest",
-        Password = Environment.GetEnvironmentVariable("RABBITMQ_PASSWORD") ?? "guest",
-        VirtualHost = Environment.GetEnvironmentVariable("RABBITMQ_VHOST") ?? "/"
-    };
+    var connStr = builder.Configuration.GetConnectionString("RabbitMqConnection");
+    return new ConnectionFactory { Uri = new Uri(connStr!) };
 });
 
 // ── Background Worker ────────────────────────────────────────────────────────

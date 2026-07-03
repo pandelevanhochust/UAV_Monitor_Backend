@@ -63,6 +63,7 @@ services:
   # ==========================================================================
 
   # ---------- PostgreSQL — User & Device Registry ----------
+  # docker exec -it uav-postgres psql -U uav_admin -d uav_user_db
   postgres:
     image: postgres:16-alpine
     container_name: uav-postgres
@@ -111,6 +112,8 @@ services:
       start_period: 10s
 
   # ---------- Redis — Distributed Cache & Heartbeat ----------
+  # docker exec -it uav-redis redis-cli 
+  # auth secure_dev_redis_password_456
   redis:
     image: redis:7-alpine
     container_name: uav-redis
@@ -120,10 +123,10 @@ services:
       --requirepass ${REDIS_PASSWORD}
       --notify-keyspace-events Ex
       --appendonly yes
+      --maxmemory 200mb
+      --maxmemory-policy allkeys-lru
     volumes:
       - redis-data:/data
-    ports:
-      - "6379:6379"
     networks:
       - uav-network
     healthcheck:

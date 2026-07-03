@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
 
 const COOKIE_NAME = 'uav_token';
+const CLAIMS_ROLE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role';
 
 /**
  * Generic JWT-injecting catch-all proxy.
@@ -64,9 +66,30 @@ async function handler(
     upstreamUrl.searchParams.set(key, value);
   });
 
-  // ── 3. Build forwarded headers ──
+  // ── 3. Build forwarded headers and inject X-User-Role ──
   const forwardedHeaders = new Headers();
   forwardedHeaders.set('Authorization', `Bearer ${token}`);
+
+  try {
+    const secret = process.env.JWT_SECRET;
+    if (secret) {
+      const { payload } = await jwtVerify(
+        token,
+        new TextEncoder().encode(secret),
+        {
+          issuer: process.env.JWT_ISSUER ?? 'uav-detection-system',
+          audience: process.env.JWT_AUDIENCE ?? 'uav-supervisors',
+          algorithms: ['HS256'],
+        }
+      );
+      const role = (payload[CLAIMS_ROLE] ?? payload['role']) as string | undefined;
+      if (role) {
+        forwardedHeaders.set('X-User-Role', role);
+      }
+    }
+  } catch (err) {
+    console.warn('[proxy] Failed to verify JWT for X-User-Role injection', err);
+  }
 
   const contentType = request.headers.get('Content-Type');
   if (contentType) {

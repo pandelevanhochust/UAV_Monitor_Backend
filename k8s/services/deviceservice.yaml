@@ -1,0 +1,103 @@
+##############################################################################
+# services/deviceservice.yaml — 2 replicas
+##############################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deviceservice
+  namespace: uav-system
+  labels:
+    app: deviceservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: deviceservice
+  template:
+    metadata:
+      labels:
+        app: deviceservice
+    spec:
+      nodeSelector:
+        tier: app
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: deviceservice
+      containers:
+        - name: deviceservice
+          image: uav_monitor_backend-deviceservice:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+            - containerPort: 9081
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Development
+            - name: ASPNETCORE_URLS
+              value: "http://+:8081"
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: "6379"
+            - name: RABBITMQ_HOST
+              value: rabbitmq
+            - name: RABBITMQ_PORT
+              value: "5672"
+            - name: RABBITMQ_VHOST
+              value: "/"
+            - name: GRPC_PORT
+              value: "9081"
+            - name: USERSERVICE_GRPC_URL
+              value: "http://userservice:9080"
+          envFrom:
+            - secretRef:
+                name: uav-secrets
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "300m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: deviceservice
+  namespace: uav-system
+  labels:
+    app: deviceservice
+spec:
+  selector:
+    app: deviceservice
+  ports:
+    - name: http
+      port: 8081
+      targetPort: 8081
+    - name: grpc
+      port: 9081
+      targetPort: 9081
+  type: ClusterIP
+
+
+
