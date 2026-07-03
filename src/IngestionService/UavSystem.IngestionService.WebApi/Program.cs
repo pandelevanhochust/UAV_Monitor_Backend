@@ -25,19 +25,23 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(8082, o => o.Protocols = HttpProtocols.Http1AndHttp2);
 });
 
-// ── Kafka (Message Broker for Ingestion) ──────────────────────────────────────
+// ── Kafka Configuration ──────────────────────────────────────────────────────
 var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
 
-// 1. Register Kafka Producer (used by TelemetryController)
+// 1. Register Kafka Producer (Fix lỗi CS0103 & Tối ưu Singleton)
 builder.Services.AddSingleton<IProducer<string, string>>(_ =>
 {
-    var config = new ProducerConfig
+    var producerConfig = new ProducerConfig
     {
-        BootstrapServers = kafkaBootstrapServers,
-        Acks = Acks.Leader,
-        LingerMs = 5 // Slight delay to increase batching on the producer side
+        BootstrapServers = kafkaBootstrapServers, // Sử dụng biến môi trường linh hoạt
+        QueueBufferingMaxMessages = 2000000,      // Cho phép đệm tới 2 triệu tin nhắn trên RAM
+        LingerMs = 20,                            // Chờ 20ms để gom các request nhỏ thành gói lớn
+        BatchNumMessages = 10000,                 // Gom tối ưu 10k bản tin mỗi gói TCP
+        CompressionType = CompressionType.Lz4     // Nén dữ liệu LZ4 giảm tải băng thông
     };
-    return new ProducerBuilder<string, string>(config).Build();
+    
+    // SỬA LỖI: Truyền đúng biến 'producerConfig' thay vì 'config'
+    return new ProducerBuilder<string, string>(producerConfig).Build();
 });
 
 // 2. Register Kafka Consumer Configuration (used by IngestionWorker)
@@ -46,10 +50,10 @@ builder.Services.AddSingleton(new ConsumerConfig
     BootstrapServers = kafkaBootstrapServers,
     GroupId = "ingestion-worker-group",
     AutoOffsetReset = AutoOffsetReset.Earliest,
-    EnableAutoCommit = false // Manual commit after DB insert
+    EnableAutoCommit = false // Manual commit after DB insert to ensure data safety
 });
 
-// ── Redis (device validation + heartbeat — NEVER PostgreSQL) ─────────────────
+// ── Redis (device validation + heartbeat) ─────────────────────────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
     var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
@@ -59,7 +63,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     return ConnectionMultiplexer.Connect(connStr!);
 });
 
-// ── ClickHouse (log writes — NEVER PostgreSQL) ──────────────────────────────
+// ── ClickHouse (log writes) ──────────────────────────────────────────────────
 builder.Services.AddSingleton(_ =>
 {
     var chHost = Environment.GetEnvironmentVariable("CLICKHOUSE_HOST");
@@ -71,7 +75,8 @@ builder.Services.AddSingleton(_ =>
 
 // ── gRPC Client → DeviceService (state transitions) ─────────────────────────
 var deviceServiceUrl = Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? 
-                       builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? "http://deviceservice:9081";
+                       builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? 
+                       "http://deviceservice:9081";
 
 builder.Services.AddSingleton(_ =>
 {
@@ -100,9 +105,11 @@ builder.Services.AddSingleton<IConnectionFactory>(_ =>
 });
 
 // ── Background Worker ────────────────────────────────────────────────────────
+// 💡 Mẹo: Khi chạy benchmark cực hạn (16k RPS) trên máy local 1 server,
+// bạn có thể tạm thời comment dòng dưới đây lại để cô lập tầng nhận (Ingestion) sang Kafka trước.
 builder.Services.AddHostedService<IngestionWorker>();
 
-// ── REST API ─────────────────────────────────────────────────────────────────
+// ── REST API & Cấu hình khác ──────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();

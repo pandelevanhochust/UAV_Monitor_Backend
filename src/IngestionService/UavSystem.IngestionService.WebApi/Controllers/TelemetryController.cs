@@ -205,22 +205,23 @@ public sealed class TelemetryController : ControllerBase, IDisposable
 
         var jsonPacket = JsonSerializer.Serialize(packet);
 
-        try
+// Thay vì await _kafkaProducer.ProduceAsync(...)
+// Hãy chuyển sang dùng .Produce() kèm một Callback bất đồng bộ siêu nhẹ:
+
+    _kafkaProducer.Produce("uav.telemetry.raw", new Message<string, string>
+    {
+        Key = payload.DeviceId.ToString(),
+        Value = jsonPacket
+    }, deliveryReport => 
+    {
+        if (deliveryReport.Error.IsError)
         {
-            await _kafkaProducer.ProduceAsync("uav.telemetry.raw", new Message<string, string>
-            {
-                Key = payload.DeviceId.ToString(),
-                Value = jsonPacket
-            });
+            _logger.LogError("Kafka delivery failed: {Reason}", deliveryReport.Error.Reason);
         }
-        catch (ProduceException<string, string> ex)
-        {
-            _logger.LogError(ex, "Failed to deliver telemetry to Kafka for device {DeviceId}", payload.DeviceId);
-            return StatusCode(StatusCodes.Status503ServiceUnavailable,
-                new { error = "Ingestion pipeline is at capacity. Retry later." });
-        }
-        _logger.LogInformation("Packet queued for device {DeviceId}", payload.DeviceId);
-        return Accepted(new { device_id = payload.DeviceId, status = "queued" });
+});
+
+// Trả về 202 ngay lập tức tại đây, không tốn thời gian chờ đợi mạng!
+return Accepted(new { device_id = payload.DeviceId, status = "queued" });
     }
 
     public void Dispose()
