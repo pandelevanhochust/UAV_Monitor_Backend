@@ -3,6 +3,7 @@ using System.Text.Json;
 using Confluent.Kafka;
 using Microsoft.AspNetCore.Mvc;
 using RabbitMQ.Client;
+using System.Threading.Channels; // 💡 THÊM DÒNG NÀY VÀO ĐẦU FILE TELEMETRYCONTROLLER.CS
 using StackExchange.Redis;
 using UavSystem.IngestionService.WebApi.Pipeline.Models;
 using UavSystem.Shared.Contracts.Events;
@@ -30,16 +31,19 @@ public sealed class TelemetryController : ControllerBase, IDisposable
     private static readonly SemaphoreSlim _publishLock = new(1, 1);
 
     private const string ExchangeName = "uav.events";
+    private readonly Channel<LogPacket> _alertChannel;
 
     public TelemetryController(
         IProducer<string, string> kafkaProducer,
         IConnectionMultiplexer connectionMultiplexer,
         IConnectionFactory rabbitConnectionFactory,
-        ILogger<TelemetryController> logger)
+        ILogger<TelemetryController> logger,
+        Channel<LogPacket> alertChannel)
     {
         _kafkaProducer = kafkaProducer;
         _redis = connectionMultiplexer.GetDatabase();
         _logger = logger;
+        _alertChannel = alertChannel;
         // _rabbitConnection = ConnectWithRetry(rabbitConnectionFactory);
         // _rabbitChannel = _rabbitConnection.CreateModel();
         // _rabbitChannel.ExchangeDeclare(ExchangeName, "topic", durable: true, autoDelete: false);
@@ -131,11 +135,6 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         // // else: Cache HIT — BCrypt skipped, validation already confirmed recently
 
 // ⚡ LUỒNG SIÊU TỐC (FAST-PATH): Nếu phát hiện Drone
-    if (payload.Detected == 1)
-    {
-        // Ghi thẳng vào RAM .NET Channel, mất chưa tới 1 micro-giây, giải phóng HTTP ngay lập tức!
-        _alertChannel.Writer.TryWrite(payload);
-    }
 
         // ── Map to LogPacket and push to Channel pipeline ────────────────────
         // The IngestionWorker handles: Redis cache update + ClickHouse batch write.
@@ -152,6 +151,13 @@ public sealed class TelemetryController : ControllerBase, IDisposable
             Latency = payload.Latency,
             Frequency = payload.Frequency
         };
+
+            if (payload.Detected == 1)
+    {
+        // Ghi thẳng vào RAM .NET Channel, mất chưa tới 1 micro-giây, giải phóng HTTP ngay lập tức!
+        _alertChannel.Writer.TryWrite(packet);
+    }
+
 
         var jsonPacket = JsonSerializer.Serialize(packet);
 

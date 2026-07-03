@@ -1,33 +1,48 @@
-public class AlertRabbitMQPublisherWorker : BackgroundService
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Threading.Channels; 
+using Microsoft.Extensions.Hosting;
+using System.Text.Json; 
+using RabbitMQ.Client; 
+
+// 💡 Đổi dòng using trỏ đúng vào thư mục Models nội bộ hiển thị trong ảnh image_c1c521.png
+using UavSystem.IngestionService.WebApi.Pipeline.Models; 
+
+namespace UavSystem.IngestionService.WebApi.Pipeline
 {
-    private readonly Channel<TelemetryPayload> _alertChannel;
-    private readonly IModel _rabbitChannel; // Cấu hình RabbitMQ Channel của bạn
-
-    public AlertRabbitMQPublisherWorker(Channel<TelemetryPayload> alertChannel, IModel rabbitChannel)
+    public class AlertRabbitMQPublisherWorker : BackgroundService
     {
-        _alertChannel = alertChannel;
-        _rabbitChannel = rabbitChannel;
-    }
+        // 💡 Đổi sang LogPacket theo đúng cấu trúc của bạn
+        private readonly Channel<LogPacket> _alertChannel; 
+        private readonly IModel _rabbitChannel; 
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // Luồng ngầm này liên tục đọc từ RAM Channel cho đến khi app tắt
-        await foreach (var payload in _alertChannel.Reader.ReadAllAsync(stoppingToken))
+        public AlertRabbitMQPublisherWorker(Channel<LogPacket> alertChannel, IModel rabbitChannel)
         {
-            try
+            _alertChannel = alertChannel;
+            _rabbitChannel = rabbitChannel;
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            // Luồng ngầm này liên tục đọc từ RAM Channel cho đến khi app tắt
+            await foreach (var payload in _alertChannel.Reader.ReadAllAsync(stoppingToken))
             {
-                var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
-                
-                // Đẩy lập tức từng bản tin Alert sang RabbitMQ để Dashboard nhận Real-time dưới 10ms
-                _rabbitChannel.BasicPublish(
-                    exchange: "uav.alerts",
-                    routingKey: "drone.detected",
-                    basicProperties: null,
-                    body: body);
-            }
-            catch (Exception ex)
-            {
-                // Log lỗi kết nối RabbitMQ nếu có nhưng KHÔNG làm sập tầng nhận HTTP
+                try
+                {
+                    var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload));
+                    
+                    // Đẩy lập tức từng bản tin Alert sang RabbitMQ
+                    _rabbitChannel.BasicPublish(
+                        exchange: "uav.alerts",
+                        routingKey: "drone.detected",
+                        basicProperties: null,
+                        body: body);
+                }
+                catch (Exception ex)
+                {
+                    // Log lỗi nếu kết nối RabbitMQ gặp sự cố
+                }
             }
         }
     }
