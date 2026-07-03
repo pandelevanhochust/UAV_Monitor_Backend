@@ -15,6 +15,7 @@ public sealed class TelemetryController : ControllerBase
     private static readonly TimeSpan DeviceCachePositiveTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan DeviceCacheNegativeTtl = TimeSpan.FromSeconds(5);
     private static readonly ConcurrentDictionary<long, DeviceCacheEntry> DeviceCache = new();
+    private static readonly ConcurrentDictionary<long, SemaphoreSlim> DeviceCacheLocks = new();
 
     private readonly TelemetryIngestionQueue _telemetryQueue;
     private readonly IDatabase _redis;
@@ -90,12 +91,27 @@ public sealed class TelemetryController : ControllerBase
             return entry.Exists;
         }
 
-        var exists = await _redis.KeyExistsAsync(RedisKeys.DeviceMeta(deviceId));
-        DeviceCache[deviceId] = new DeviceCacheEntry(
-            exists,
-            now.Add(exists ? DeviceCachePositiveTtl : DeviceCacheNegativeTtl));
+        var cacheLock = DeviceCacheLocks.GetOrAdd(deviceId, _ => new SemaphoreSlim(1, 1));
+        await cacheLock.WaitAsync();
+        try
+        {
+            now = DateTimeOffset.UtcNow;
+            if (DeviceCache.TryGetValue(deviceId, out entry) && entry.ExpiresAt > now)
+            {
+                return entry.Exists;
+            }
 
-        return exists;
+            var exists = await _redis.KeyExistsAsync(RedisKeys.DeviceMeta(deviceId));
+            DeviceCache[deviceId] = new DeviceCacheEntry(
+                exists,
+                now.Add(exists ? DeviceCachePositiveTtl : DeviceCacheNegativeTtl));
+
+            return exists;
+        }
+        finally
+        {
+            cacheLock.Release();
+        }
     }
 
     private readonly record struct DeviceCacheEntry(bool Exists, DateTimeOffset ExpiresAt);
