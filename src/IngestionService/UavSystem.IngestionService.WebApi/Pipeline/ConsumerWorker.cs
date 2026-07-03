@@ -52,6 +52,7 @@ public sealed class IngestionWorker : BackgroundService
 
             try
             {
+                // Lấy batch data từ kafka
                 ConsumeBatch(batch, stoppingToken);
 
                 if (batch.Count == 0)
@@ -82,6 +83,7 @@ public sealed class IngestionWorker : BackgroundService
         _kafkaConsumer.Close();
     }
 
+    // Lấy batch data từ kafka
     private void ConsumeBatch(List<LogPacket> batch, CancellationToken ct)
     {
         while (batch.Count < BatchSize && !ct.IsCancellationRequested)
@@ -118,6 +120,7 @@ public sealed class IngestionWorker : BackgroundService
         }
     }
 
+    // Lấy ra state cuối cùng trong batch data để xử lý
     private async Task ProcessStateDeltasAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var latestByDevice = GetLatestPacketByDevice(batch);
@@ -177,6 +180,7 @@ public sealed class IngestionWorker : BackgroundService
         }
     }
 
+    // Lấy log cuối cùng để update vào Redis
     private async Task UpdateLatestLogsAsync(List<LogPacket> batch, CancellationToken ct)
     {
         var latestByDevice = GetLatestPacketByDevice(batch);
@@ -209,6 +213,7 @@ public sealed class IngestionWorker : BackgroundService
         await Task.WhenAll(tasks);
     }
 
+    // Bulk Insert
     private async Task WriteToClickHouseAsync(List<LogPacket> batch, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

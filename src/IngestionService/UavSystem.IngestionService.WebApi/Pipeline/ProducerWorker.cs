@@ -21,26 +21,32 @@ public sealed class Producer : BackgroundService
         _queue = queue;
         _producer = producer;
         _logger = logger;
+        // Quyet dinh số worker
         _workerCount = ResolveWorkerCount();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("Kafka telemetry producer started with {WorkerCount} workers", _workerCount);
+        // _logger.LogInformation("Kafka telemetry producer started with {WorkerCount} workers", _workerCount);
 
+        // Cơ chế multi-threading gồm các worker để đọc và publish Kafka concurrently
         var workers = Enumerable.Range(0, _workerCount)
             .Select(workerId => RunProducerLoopAsync(workerId, stoppingToken));
-
+        // giữ cho BackgroundService luôn sống cho đến khi tất cả các luồng con kết thúc an toàn.
         await Task.WhenAll(workers);
     }
 
     private async Task RunProducerLoopAsync(int workerId, CancellationToken stoppingToken)
     {
+        // Cơ chế ReadAllAsync giúp giải phóng tài nguyên ngay lập tức khi Channel trống.
         await foreach (var packet in _queue.ReadAllAsync(stoppingToken))
         {
             try
             {
+                // Đóng gói packet thành JSON string 
                 var jsonPacket = JsonSerializer.Serialize(packet);
+
+                // Đẩy vô producer, tách biệt thao tác của Kafka khỏi luồng HTTP
                 _producer.Produce(TopicName, new Message<string, string>
                 {
                     Key = packet.DeviceId.ToString(),
@@ -64,15 +70,17 @@ public sealed class Producer : BackgroundService
         }
     }
 
+
     private static int ResolveWorkerCount()
     {
+        // Config số worker trong .env nếu cần, ở bài toàn tối ưu này thì sẽ lấy max số worker mà CPU mang lại được
         var configuredValue = Environment.GetEnvironmentVariable("TELEMETRY_PRODUCER_WORKERS");
         if (int.TryParse(configuredValue, out var configuredCount) && configuredCount > 0)
         {
-            return configuredCount;
+                return configuredCount;
         }
-
-        return Math.Clamp(Environment.ProcessorCount / 2, 2, 8);
+        // Lấy số nhân CPU chia 2 để lấy ra số worker. Nhường lại 50% số nhân CPU cho các tác vụ nặng
+        return Math.Clamp(Environment.ProcessorCount / 2, 2, 8); //min =2, max =8
     }
 
     public override void Dispose()
