@@ -49,7 +49,8 @@ INSERT INTO devices (device_id, location_name, status, assigned_monitor_id, api_
 VALUES
     (1001, 'Hanoi - North Gate Radar Station', 'Offline', '00000000-0000-0000-0000-000000000002', '$2a$11$fDX.YSw.UtCLsF.6cwD/MO2Pg4JiiWsCBIhay28ToisFyJkVrPoW6', NOW()),
     (1002, 'Hanoi - East Perimeter Radar Station', 'Offline', '00000000-0000-0000-0000-000000000003', '$2a$11$QYD3/P1xDKONuNMft9mfvu0EaPGIVOqTf8pL3lWU.sBArvKTE9Nu6', NOW()),
-    (1003, 'Hanoi - South Airbase Radar Station', 'Offline', NULL, '$2a$11$5Lw27ACIxHAal2mtESZEl.DUnDy.IqT6QjcwEGuIL9XWgJNxWo7.K', NOW())
+    (1003, 'Hanoi - South Airbase Radar Station', 'Offline', NULL, '$2a$11$5Lw27ACIxHAal2mtESZEl.DUnDy.IqT6QjcwEGuIL9XWgJNxWo7.K', NOW()),
+    (1004, 'Hai Phong Port', 'Offline', NULL, '$2a$11$5Lw27ACIxHAal2mtESZEl.DUnDy.IqT6QjcwEGuIL9XWgJNxWo7.K', NOW())
 ON CONFLICT (device_id) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS "__EFMigrationsHistory" (
