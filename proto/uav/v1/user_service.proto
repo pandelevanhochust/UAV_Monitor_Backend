@@ -9,5 +9,6 @@ service UserService {
 
 message ValidateTokenRequest { string token = 1; }
 message ValidateTokenResponse { string user_id = 1; string role = 2; bool is_valid = 3; }
+
 message GetDevicesRequest { string user_id = 1; }
 message GetDevicesResponse { repeated int64 device_ids = 1; }

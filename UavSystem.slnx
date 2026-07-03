@@ -1,4 +1,5 @@
 <Solution>
+
   <Folder Name="/src/" />
   <Folder Name="/src/AlertService/">
     <Project Path="src/AlertService/UavSystem.AlertService.WebApi/UavSystem.AlertService.WebApi.csproj" />
@@ -27,4 +28,5 @@
     <Project Path="src/UserService/UavSystem.UserService.Infrastructure/UavSystem.UserService.Infrastructure.csproj" />
     <Project Path="src/UserService/UavSystem.UserService.WebApi/UavSystem.UserService.WebApi.csproj" />
   </Folder>
+
 </Solution>
