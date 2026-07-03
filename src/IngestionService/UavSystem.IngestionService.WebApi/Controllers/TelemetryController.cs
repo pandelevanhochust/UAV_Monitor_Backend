@@ -134,7 +134,6 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         }
         // // else: Cache HIT — BCrypt skipped, validation already confirmed recently
 
-// ⚡ LUỒNG SIÊU TỐC (FAST-PATH): Nếu phát hiện Drone
 
         // ── Map to LogPacket and push to Channel pipeline ────────────────────
         // The IngestionWorker handles: Redis cache update + ClickHouse batch write.
@@ -156,6 +155,7 @@ public sealed class TelemetryController : ControllerBase, IDisposable
     {
         // Ghi thẳng vào RAM .NET Channel, mất chưa tới 1 micro-giây, giải phóng HTTP ngay lập tức!
         _alertChannel.Writer.TryWrite(packet);
+        
     }
 
 
@@ -174,6 +174,8 @@ public sealed class TelemetryController : ControllerBase, IDisposable
             _logger.LogError("Kafka delivery failed: {Reason}", deliveryReport.Error.Reason);
         }
 });
+
+    _logger.LogInformation("Telemetry log queued for device {DeviceId} at {Timestamp}", payload.DeviceId, payload.Timestamp);
 
 // Trả về 202 ngay lập tức tại đây, không tốn thời gian chờ đợi mạng!
 return Accepted(new { device_id = payload.DeviceId, status = "queued" });
