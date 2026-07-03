@@ -35,7 +35,6 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<LogPacket>(new UnboundedCh
 // ── Kafka Configuration ──────────────────────────────────────────────────────
 var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
 
-// 1. Register Kafka Producer (Fix lỗi CS0103 & Tối ưu Singleton)
 builder.Services.AddSingleton<IProducer<string, string>>(_ =>
 {
     var producerConfig = new ProducerConfig
@@ -47,7 +46,6 @@ builder.Services.AddSingleton<IProducer<string, string>>(_ =>
         CompressionType = CompressionType.Lz4     // Nén dữ liệu LZ4 giảm tải băng thông
     };
     
-    // SỬA LỖI: Truyền đúng biến 'producerConfig' thay vì 'config'
     return new ProducerBuilder<string, string>(producerConfig).Build();
 });
 
@@ -57,7 +55,7 @@ builder.Services.AddSingleton(new ConsumerConfig
     BootstrapServers = kafkaBootstrapServers,
     GroupId = "ingestion-worker-group",
     AutoOffsetReset = AutoOffsetReset.Earliest,
-    EnableAutoCommit = false // Manual commit after DB insert to ensure data safety
+    EnableAutoCommit = false
 });
 
 // ── Redis (device validation + heartbeat) ─────────────────────────────────────
@@ -112,8 +110,6 @@ builder.Services.AddSingleton<IConnectionFactory>(_ =>
 });
 
 // ── Background Worker ────────────────────────────────────────────────────────
-// 💡 Mẹo: Khi chạy benchmark cực hạn (16k RPS) trên máy local 1 server,
-// bạn có thể tạm thời comment dòng dưới đây lại để cô lập tầng nhận (Ingestion) sang Kafka trước.
 builder.Services.AddHostedService<IngestionWorker>();
 
 // ── REST API & Cấu hình khác ──────────────────────────────────────────────────
