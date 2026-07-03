@@ -102,90 +102,40 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         // //      → Cache HIT  : skip BCrypt entirely (~2ms Redis lookup)
         // //      → Cache MISS : run BCrypt once, then cache the result
 
-        // var metaKey    = RedisKeys.DeviceMeta(payload.DeviceId);
-        // var cacheKey   = $"apikey:validated:{payload.DeviceId}:{apiKey[..Math.Min(8, apiKey.Length)]}";
+        var metaKey    = RedisKeys.DeviceMeta(payload.DeviceId);
+        var cacheKey   = $"apikey:validated:{payload.DeviceId}:{apiKey[..Math.Min(8, apiKey.Length)]}";
 
-        // var cachedResult = await _redis.StringGetAsync(cacheKey);
+        var cachedResult = await _redis.StringGetAsync(cacheKey);
 
-        // if (cachedResult.IsNullOrEmpty)
-        // {
-        //     // ── Cache MISS: full BCrypt verification ─────────────────────────
-        //     var storedHash = await _redis.HashGetAsync(metaKey, "api_key_hash");
+        if (cachedResult.IsNullOrEmpty)
+        {
+            // ── Cache MISS: full BCrypt verification ─────────────────────────
+            var storedHash = await _redis.HashGetAsync(metaKey, "api_key_hash");
 
-        //     if (storedHash.IsNullOrEmpty)
-        //     {
-        //         _logger.LogWarning("Device {DeviceId} not found in Redis cache", payload.DeviceId);
-        //         return Unauthorized(new { error = "Device not registered." });
-        //     }
+            if (storedHash.IsNullOrEmpty)
+            {
+                _logger.LogWarning("Device {DeviceId} not found in Redis cache", payload.DeviceId);
+                return Unauthorized(new { error = "Device not registered." });
+            }
 
-        //     if (!BCrypt.Net.BCrypt.Verify(apiKey, storedHash.ToString()))
-        //     {
-        //         _logger.LogWarning("Invalid API key for device {DeviceId}", payload.DeviceId);
-        //         return Unauthorized(new { error = "Invalid API key." });
-        //     }
-        //     // Cache successful validation for 30 minutes — reduces BCrypt to ~0.05% of requests.
-        //     // Also ensures cache survives the entire benchmark run (including cool-downs).
-        //     await _redis.StringSetAsync(cacheKey, "1", TimeSpan.FromMinutes(30));
-        //     _logger.LogDebug("API key verified via BCrypt for device {DeviceId} — result cached", payload.DeviceId);
-        // }
+            if (!BCrypt.Net.BCrypt.Verify(apiKey, storedHash.ToString()))
+            {
+                _logger.LogWarning("Invalid API key for device {DeviceId}", payload.DeviceId);
+                return Unauthorized(new { error = "Invalid API key." });
+            }
+            // Cache successful validation for 30 minutes — reduces BCrypt to ~0.05% of requests.
+            // Also ensures cache survives the entire benchmark run (including cool-downs).
+            await _redis.StringSetAsync(cacheKey, "1", TimeSpan.FromMinutes(30));
+            _logger.LogDebug("API key verified via BCrypt for device {DeviceId} — result cached", payload.DeviceId);
+        }
         // // else: Cache HIT — BCrypt skipped, validation already confirmed recently
 
-        // // ── FAST PATH: Immediate Alert Dispatch (bypasses batch wait) ────────
-        // if (payload.Detected == 1)
-        // {
-        //     try
-        //     {
-        //         var location = await _redis.HashGetAsync(metaKey, "location");
-
-        //         var @event = new DroneDetectedEvent(
-        //             DeviceId: payload.DeviceId,
-        //             Timestamp: payload.Timestamp,
-        //             Location: location.IsNullOrEmpty ? string.Empty : location.ToString(),
-        //             DroneType: payload.DroneType,
-        //             ControlState: payload.ControlState,
-        //             Accuracy: payload.Accuracy
-        //         );
-
-        //         var body = JsonSerializer.SerializeToUtf8Bytes(@event, new JsonSerializerOptions
-        //         {
-        //             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        //         });
-
-        //         // Serialize channel access — IModel is not thread-safe.
-        //         // SemaphoreSlim async-await yields the thread instead of blocking it.
-        //         await _publishLock.WaitAsync(ct);
-        //         try
-        //         {
-        //             var props = _rabbitChannel.CreateBasicProperties();
-        //             props.ContentType = "application/json";
-        //             props.DeliveryMode = 2; // Persistent
-        //             props.MessageId = Guid.NewGuid().ToString();
-        //             props.Type = nameof(DroneDetectedEvent);
-
-        //             _rabbitChannel.BasicPublish(
-        //                 exchange: ExchangeName,
-        //                 routingKey: $"device.{payload.DeviceId}.detection.critical",
-        //                 mandatory: false,  // fire-and-forget — no confirm wait
-        //                 basicProperties: props,
-        //                 body: body);
-        //             // Fire-and-forget: RabbitMQ will buffer and deliver asynchronously.
-        //             // AlertService receives the event within ~10-20ms without blocking here.
-        //         }
-        //         finally
-        //         {
-        //             _publishLock.Release();
-        //         }
-
-        //         _logger.LogInformation(
-        //             "Immediate alert dispatched for device {DeviceId} (type={DroneType}, accuracy={Accuracy:F2})",
-        //             payload.DeviceId, payload.DroneType, payload.Accuracy);
-        //     }
-        //     catch (Exception ex)
-        //     {
-        //         // Non-fatal: log and continue — telemetry is still queued for ClickHouse
-        //         _logger.LogError(ex, "Failed to dispatch immediate alert for device {DeviceId}", payload.DeviceId);
-        //     }
-        // }
+// ⚡ LUỒNG SIÊU TỐC (FAST-PATH): Nếu phát hiện Drone
+    if (payload.Detected == 1)
+    {
+        // Ghi thẳng vào RAM .NET Channel, mất chưa tới 1 micro-giây, giải phóng HTTP ngay lập tức!
+        _alertChannel.Writer.TryWrite(payload);
+    }
 
         // ── Map to LogPacket and push to Channel pipeline ────────────────────
         // The IngestionWorker handles: Redis cache update + ClickHouse batch write.
@@ -205,8 +155,7 @@ public sealed class TelemetryController : ControllerBase, IDisposable
 
         var jsonPacket = JsonSerializer.Serialize(packet);
 
-// Thay vì await _kafkaProducer.ProduceAsync(...)
-// Hãy chuyển sang dùng .Produce() kèm một Callback bất đồng bộ siêu nhẹ:
+
 
     _kafkaProducer.Produce("uav.telemetry.raw", new Message<string, string>
     {

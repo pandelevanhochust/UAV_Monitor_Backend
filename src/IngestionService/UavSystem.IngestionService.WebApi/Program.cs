@@ -25,6 +25,13 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(8082, o => o.Protocols = HttpProtocols.Http1AndHttp2);
 });
 
+// Tạo một Channel luồng RAM nội bộ, không giới hạn dung lượng để ghi tốc độ ánh sáng
+builder.Services.AddSingleton(Channel.CreateUnbounded<TelemetryPayload>(new UnboundedChannelOptions
+{
+    SingleReader = true, // Chỉ cần 1 Worker ngầm đọc để đẩy sang RabbitMQ
+    SingleWriter = false // Nhiều HTTP Controller luồng có thể ghi vào cùng lúc
+}));
+
 // ── Kafka Configuration ──────────────────────────────────────────────────────
 var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
 
