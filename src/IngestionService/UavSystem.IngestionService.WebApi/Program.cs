@@ -33,6 +33,14 @@ builder.Services.AddSingleton(Channel.CreateUnbounded<LogPacket>(new UnboundedCh
 }));
 
 // ── Kafka Configuration ──────────────────────────────────────────────────────
+var telemetryQueueCapacityValue =
+    Environment.GetEnvironmentVariable("TELEMETRY_QUEUE_CAPACITY") ??
+    builder.Configuration["Ingestion:TelemetryQueueCapacity"];
+var telemetryQueueCapacity = int.TryParse(telemetryQueueCapacityValue, out var parsedTelemetryQueueCapacity)
+    ? parsedTelemetryQueueCapacity
+    : 250000;
+
+builder.Services.AddSingleton(new TelemetryIngestionQueue(telemetryQueueCapacity));
 var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
 
 // 1. Register Kafka Producer (Fix lỗi CS0103 & Tối ưu Singleton)
@@ -114,6 +122,7 @@ builder.Services.AddSingleton<IConnectionFactory>(_ =>
 // ── Background Worker ────────────────────────────────────────────────────────
 // 💡 Mẹo: Khi chạy benchmark cực hạn (16k RPS) trên máy local 1 server,
 // bạn có thể tạm thời comment dòng dưới đây lại để cô lập tầng nhận (Ingestion) sang Kafka trước.
+builder.Services.AddHostedService<Producer>();
 builder.Services.AddHostedService<IngestionWorker>();
 
 // ── REST API & Cấu hình khác ──────────────────────────────────────────────────
