@@ -11,7 +11,7 @@ public sealed class TelemetryIngestionQueue
     {
         _channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(capacity)
         {
-            SingleReader = true,
+            SingleReader = false,
             SingleWriter = false,
             FullMode = BoundedChannelFullMode.Wait
         });

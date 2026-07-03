@@ -38,9 +38,6 @@ public sealed class IngestionWorker : BackgroundService
         _clickHouseConnection = clickHouseConnection;
         _deviceGrpcClient = deviceGrpcClient;
         _logger = logger;
-        
-        // Ghi chú: Kết nối RabbitMQ đã được gỡ bỏ hoàn toàn khỏi Worker 
-        // do Fast Path đã chuyển ra ngoài TelemetryController ✓
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -145,8 +142,8 @@ public sealed class IngestionWorker : BackgroundService
             if (!cachedStatus.IsNullOrEmpty &&
                 !string.Equals(cachedStatus.ToString(), ctx.Packet.Status, StringComparison.OrdinalIgnoreCase))
             {
-                _logger.LogInformation("State delta identified for device {DeviceId}: {Cached} -> {Reported}",
-                    ctx.Packet.DeviceId, cachedStatus, ctx.Packet.Status);
+                // _logger.LogInformation("State delta identified for device {DeviceId}: {Cached} -> {Reported}",
+                //     ctx.Packet.DeviceId, cachedStatus, ctx.Packet.Status);
 
                 var grpcRequest = new UpdateDeviceStatusRequest
                 {
