@@ -45,76 +45,80 @@ public sealed class IngestionWorker : BackgroundService
         // do Fast Path đã chuyển ra ngoài TelemetryController ✓
     }
 
-protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-{
-    _logger.LogInformation("[IngestionWorker] 🚀 HIGH-THROUGHPUT PIPELINE ACTIVATED ON 16-CORE NODE 🚀");
-    _kafkaConsumer.Subscribe("uav.telemetry.raw");
-    
-    // BƯỚC 1: Tạo một khay chứa RAM nội bộ siêu tốc (Không giới hạn hoặc Bounded lớn)
-    // Đây là cái bể giảm chấn để luồng kéo tin Kafka không bị block bởi luồng ghi đĩa ClickHouse
-    var internalBuffer = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(150000) {
-        FullMode = BoundedChannelFullMode.Wait,
-        SingleWriter = true, // Chỉ có 1 luồng Kafka Consume ghi vào
-        SingleReader = false  
-    });
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("[IngestionWorker] Pipeline activated on 16-Core Node - Pulling telemetry batches from Kafka");
 
-    // BƯỚC 2: LUỒNG ĐỘC QUYỀN KÉO TIN (Chạy trên 1 thớt CPU riêng biệt)
-    // Nhiệm vụ duy nhất: Kéo tin kịch tốc độ từ Kafka, ném vào RAM Channel rồi quay lại kéo tiếp, KHÔNG ĐỢI AI.
-    var kafkaPullerTask = Task.Run(async () => {
-        try {
-            while (!stoppingToken.IsCancellationRequested) {
-                // Đặt timeout cực nhỏ (5-10ms) để luồng này giật tin liên tục không ngừng nghỉ
-                var consumeResult = _kafkaConsumer.Consume(TimeSpan.FromMilliseconds(10));
-                if (consumeResult != null) {
-                    var packet = JsonSerializer.Deserialize<LogPacket>(consumeResult.Message.Value, 
-                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                    if (packet != null) {
-                        await internalBuffer.Writer.WriteAsync(packet, stoppingToken);
-                    }
-                }
-            }
-        }
-        catch (Exception ex) { _logger.LogError(ex, "Kafka Puller crashed"); }
-        finally { internalBuffer.Writer.Complete(); }
-    }, stoppingToken);
-
-    // BƯỚC 3: CỤM 4 WORKERS SONG SONG (Tận dụng triệt để 16-Core Node)
-    // Đẻ ra 4 Tasks chạy song song hoàn toàn độc lập để chia nhau dọn rác trong RAM Channel
-    int parallelWorkerCount = 4;
-    var processingTasks = Enumerable.Range(0, parallelWorkerCount).Select(async workerId => {
-        _logger.LogInformation($" ↳ [Worker Thread {workerId}] Initialized and listening to RAM Channel.");
+        _kafkaConsumer.Subscribe("uav.telemetry.raw");
         var batch = new List<LogPacket>(BatchSize);
 
-        while (await internalBuffer.Reader.WaitToReadAsync(stoppingToken)) {
+        while (!stoppingToken.IsCancellationRequested)
+        {
             batch.Clear();
-            
-            // Gom đủ 20,000 dòng hoặc hốt sạch những gì đang có trên RAM hiện tại
-            while (batch.Count < BatchSize && internalBuffer.Reader.TryRead(out var packet)) {
-                batch.Add(packet);
+
+            try
+            {
+                // Batched consume loop using timeout
+                while (batch.Count < BatchSize)
+                {
+                    try
+                    {
+                        var consumeResult = _kafkaConsumer.Consume(TimeSpan.FromMilliseconds(BatchTimeoutMs));
+                        if (consumeResult == null || consumeResult.IsPartitionEOF)
+                        {
+                            break; // Timeout reached or EOF
+                        }
+
+                        var packet = JsonSerializer.Deserialize<LogPacket>(consumeResult.Message.Value, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        if (packet != null)
+                        {
+                            batch.Add(packet);
+                        }
+                    }
+                    catch (ConsumeException e)
+                    {
+                        if (e.Error.Reason.Contains("Unknown topic", StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogWarning("Topic 'uav.telemetry.raw' does not exist yet. Waiting for the first telemetry packet to be produced...");
+                            await Task.Delay(2000, stoppingToken);
+                            break;
+                        }
+                        
+                        _logger.LogError(e, "Error consuming from Kafka");
+                        await Task.Delay(1000, stoppingToken);
+                    }
+                }
+
+                if (batch.Count == 0)
+                    continue;
+
+                _logger.LogDebug("Processing parallelized pipeline batch of {Count} packets", batch.Count);
+
+                // Kích hoạt thực thi đồng thời cả Step 1 và Step 2 để tận dụng tối đa kiến trúc đa nhân của CPU
+                var step1Task = ProcessStateDeltasAsync(batch, stoppingToken);
+                var step2Task = UpdateLatestLogsAsync(batch, stoppingToken);
+
+                await Task.WhenAll(step1Task, step2Task);
+
+                // Step 3: Ghi dữ liệu khối dạng cột xuống ClickHouse
+                await WriteToClickHouseAsync(batch, stoppingToken);
+
+                // Step 4: Commit offsets back to Kafka only after successful ClickHouse write
+                _kafkaConsumer.Commit();
             }
-
-            if (batch.Any()) {
-                try {
-                    // Xử lý song song logic nghiệp vụ nội bộ
-                    var step1 = ProcessStateDeltasAsync(batch, stoppingToken);
-                    var step2 = UpdateLatestLogsAsync(batch, stoppingToken);
-                    await Task.WhenAll(step1, step2);
-
-                    // Xả dữ liệu dạng cột xuống ClickHouse
-                    // 4 luồng này sẽ thay nhau nã Bulk Insert, ClickHouse sẽ nuốt trọn vẹn
-                    await WriteToClickHouseAsync(batch, stoppingToken);
-                }
-                catch (Exception ex) {
-                    _logger.LogError(ex, $"Critical failure in Worker Thread {workerId}");
-                }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Critical failure inside IngestionWorker batch pipeline execution");
             }
         }
-    }).ToArray();
+        
+        _kafkaConsumer.Close();
+    }
 
-    // Khởi chạy toàn bộ guồng máy
-    await Task.WhenAll(kafkaPullerTask, Task.WhenAll(processingTasks));
-    _kafkaConsumer.Close();
-}
     /// <summary>
     /// Step 1 Tối ưu: Chuyển đổi sang gọi gRPC song song song (Fan-Out) 
     /// Thay thế luồng chạy tuần tự cũ để giải phóng nghẽn mạch I/O mạng.
