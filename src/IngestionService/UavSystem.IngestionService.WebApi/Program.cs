@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 using ClickHouse.Client.ADO;
+using Confluent.Kafka;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using RabbitMQ.Client;
@@ -24,18 +25,50 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(8082, o => o.Protocols = HttpProtocols.Http1AndHttp2);
 });
 
-// ── Channel<LogPacket> Pipeline (bounded, backpressure-aware) ────────────────
-var channel = Channel.CreateBounded<LogPacket>(new BoundedChannelOptions(200_000)
+// 💡 Sửa thành LogPacket để đồng bộ với cấu trúc Pipeline của bạn
+builder.Services.AddSingleton(Channel.CreateUnbounded<LogPacket>(new UnboundedChannelOptions
 {
-    FullMode = BoundedChannelFullMode.DropWrite, // Backpressure: TryWrite returns false
-    SingleReader = true,  // Single IngestionWorker consumer
-    SingleWriter = false  // Multiple concurrent HTTP requests
+    SingleReader = true, // Chỉ cần 1 bản thể Worker đọc
+    SingleWriter = false // Nhiều luồng Controller ghi vào cùng lúc
+}));
+
+// ── Kafka Configuration ──────────────────────────────────────────────────────
+var telemetryQueueCapacityValue =
+    Environment.GetEnvironmentVariable("TELEMETRY_QUEUE_CAPACITY") ??
+    builder.Configuration["Ingestion:TelemetryQueueCapacity"];
+var telemetryQueueCapacity = int.TryParse(telemetryQueueCapacityValue, out var parsedTelemetryQueueCapacity)
+    ? parsedTelemetryQueueCapacity
+    : 250000;
+
+builder.Services.AddSingleton(new TelemetryIngestionQueue(telemetryQueueCapacity));
+var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
+
+// 1. Register Kafka Producer (Fix lỗi CS0103 & Tối ưu Singleton)
+builder.Services.AddSingleton<IProducer<string, string>>(_ =>
+{
+    var producerConfig = new ProducerConfig
+    {
+        BootstrapServers = kafkaBootstrapServers, // Sử dụng biến môi trường linh hoạt
+        QueueBufferingMaxMessages = 2000000,      // Cho phép đệm tới 2 triệu tin nhắn trên RAM
+        LingerMs = 100,                            // Chờ 20ms để gom các request nhỏ thành gói lớn
+        BatchNumMessages = 10000,                 // Gom tối ưu 10k bản tin mỗi gói TCP
+        CompressionType = CompressionType.Lz4     // Nén dữ liệu LZ4 giảm tải băng thông
+    };
+    
+    // SỬA LỖI: Truyền đúng biến 'producerConfig' thay vì 'config'
+    return new ProducerBuilder<string, string>(producerConfig).Build();
 });
 
-builder.Services.AddSingleton(channel.Writer);
-builder.Services.AddSingleton(channel.Reader);
+// 2. Register Kafka Consumer Configuration (used by IngestionWorker)
+builder.Services.AddSingleton(new ConsumerConfig
+{
+    BootstrapServers = kafkaBootstrapServers,
+    GroupId = "ingestion-worker-group",
+    AutoOffsetReset = AutoOffsetReset.Earliest,
+    EnableAutoCommit = false // Manual commit after DB insert to ensure data safety
+});
 
-// ── Redis (device validation + heartbeat — NEVER PostgreSQL) ─────────────────
+// ── Redis (device validation + heartbeat) ─────────────────────────────────────
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
     var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
@@ -45,7 +78,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     return ConnectionMultiplexer.Connect(connStr!);
 });
 
-// ── ClickHouse (log writes — NEVER PostgreSQL) ──────────────────────────────
+// ── ClickHouse (log writes) ──────────────────────────────────────────────────
 builder.Services.AddSingleton(_ =>
 {
     var chHost = Environment.GetEnvironmentVariable("CLICKHOUSE_HOST");
@@ -57,7 +90,8 @@ builder.Services.AddSingleton(_ =>
 
 // ── gRPC Client → DeviceService (state transitions) ─────────────────────────
 var deviceServiceUrl = Environment.GetEnvironmentVariable("DEVICE_SERVICE_GRPC_URL") ?? 
-                       builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? "http://deviceservice:9081";
+                       builder.Configuration.GetSection("GrpcSettings")["DeviceServiceUrl"] ?? 
+                       "http://deviceservice:9081";
 
 builder.Services.AddSingleton(_ =>
 {
@@ -86,9 +120,12 @@ builder.Services.AddSingleton<IConnectionFactory>(_ =>
 });
 
 // ── Background Worker ────────────────────────────────────────────────────────
+// 💡 Mẹo: Khi chạy benchmark cực hạn (16k RPS) trên máy local 1 server,
+// bạn có thể tạm thời comment dòng dưới đây lại để cô lập tầng nhận (Ingestion) sang Kafka trước.
+builder.Services.AddHostedService<Producer>();
 builder.Services.AddHostedService<IngestionWorker>();
 
-// ── REST API ─────────────────────────────────────────────────────────────────
+// ── REST API & Cấu hình khác ──────────────────────────────────────────────────
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();

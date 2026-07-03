@@ -53,8 +53,10 @@ public sealed class StatusChangeConsumer : RabbitMqConsumerBase<DeviceStatusChan
         // ── Redis reverse-lookup: resolve monitor assignment ─────────────
         var db = _redis.GetDatabase();
         var metaKey = RedisKeys.DeviceMeta(message.DeviceId);
-        var monitorId = await db.HashGetAsync(metaKey, "monitor_id");
-
+// Thay vì gọi 2 lần HashGetAsync, hãy gọi 1 lần HashGetAsync cho mảng các trường
+        var fields = await db.HashGetAsync(metaKey, new RedisValue[] { "monitor_id", "location" });
+        var monitorId = fields[0];
+        var location = fields[1];
         if (monitorId.IsNullOrEmpty || string.IsNullOrWhiteSpace(monitorId.ToString()))
         {
             _logger.LogDebug(
@@ -66,7 +68,6 @@ public sealed class StatusChangeConsumer : RabbitMqConsumerBase<DeviceStatusChan
         var userId = monitorId.ToString();
 
         // ── Enrich with location ─────────────────────────────────────────
-        var location = await db.HashGetAsync(metaKey, "location");
         var payload = new
         {
             message.DeviceId,

@@ -89,6 +89,7 @@ builder.Services.AddGrpc();
 
 // ── Background Services ──────────────────────────────────────────────────────
 builder.Services.AddHostedService<RedisHeartbeatWatcherService>();
+builder.Services.AddHostedService<RedisStartupSyncWorker>();
 
 // ── REST API ─────────────────────────────────────────────────────────────────
 builder.Services.AddControllers();

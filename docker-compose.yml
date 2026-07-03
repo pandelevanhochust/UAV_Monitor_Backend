@@ -13,6 +13,7 @@ volumes:
   clickhouse-data:
   redis-data:
   rabbitmq-data:
+  kafka-data:
 
 services:
 
@@ -158,6 +159,38 @@ services:
       retries: 5
       start_period: 30s
 
+  # ---------- Apache Kafka — Ingestion Message Broker ----------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: uav-kafka
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092'
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:29092'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    ports:
+      - "29092:29092"
+    networks:
+      - uav-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   # ==========================================================================
   # APPLICATION SERVICES (.NET 9)
   # ==========================================================================
@@ -268,6 +301,8 @@ services:
       RABBITMQ_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS}
       RABBITMQ_VHOST: /
+      # Kafka (ingestion broker)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # gRPC (DeviceService state updates)
       DEVICE_SERVICE_GRPC_URL: http://deviceservice:9081
     ports:
@@ -280,6 +315,8 @@ services:
       clickhouse:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   # ---------- LogService — Paginated Historical Query API ----------
