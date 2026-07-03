@@ -87,7 +87,14 @@ CPU đã chạm ngưỡng 100%, rất có thể khi chạy lâu hơn nữa, hệ
 Tiếp tục đặt ngưỡng cao hơn, hiện tượng quá tải diễn ra rất nhanh:
 
 <video src="img_homework/lab_35000.mp4" controls width="100%"></video>
-https://github.com/user-attachments/assets/eb698b4f-fb7b-490f-b4a9-8e584392da42
+
+
+https://github.com/user-attachments/assets/8fcf21b2-3dcf-4dde-bcbc-f69c2621f657
+
+
+
+
+
 
 ## 4. Lời kết
 
