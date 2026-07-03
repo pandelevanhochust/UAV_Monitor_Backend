@@ -35,7 +35,7 @@ builder.Services.AddSingleton<IProducer<string, string>>(_ =>
     {
         BootstrapServers = kafkaBootstrapServers, // Sử dụng biến môi trường linh hoạt
         QueueBufferingMaxMessages = 2000000,      // Cho phép đệm tới 2 triệu tin nhắn trên RAM
-        LingerMs = 20,                            // Chờ 20ms để gom các request nhỏ thành gói lớn
+        LingerMs = 100,                            // Chờ 20ms để gom các request nhỏ thành gói lớn
         BatchNumMessages = 10000,                 // Gom tối ưu 10k bản tin mỗi gói TCP
         CompressionType = CompressionType.Lz4     // Nén dữ liệu LZ4 giảm tải băng thông
     };
