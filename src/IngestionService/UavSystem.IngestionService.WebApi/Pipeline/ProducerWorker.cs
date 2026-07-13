@@ -29,16 +29,16 @@ public sealed class Producer : BackgroundService
     {
         // _logger.LogInformation("Kafka telemetry producer started with {WorkerCount} workers", _workerCount);
 
-        // Cơ chế multi-threading gồm các worker để đọc và publish Kafka concurrently
+        // Tạo thành các task chạy loop xử lý song song
         var workers = Enumerable.Range(0, _workerCount)
             .Select(workerId => RunProducerLoopAsync(workerId, stoppingToken));
-        // giữ cho BackgroundService luôn sống cho đến khi tất cả các luồng con kết thúc an toàn.
+        // chờ tất cả worker kết thúc
         await Task.WhenAll(workers);
     }
 
     private async Task RunProducerLoopAsync(int workerId, CancellationToken stoppingToken)
     {
-        // Cơ chế ReadAllAsync giúp giải phóng tài nguyên ngay lập tức khi Channel trống.
+        // Cơ chế ReadAllAsync giúp giải phóng task ngay lập tức khi Channel trống.
         await foreach (var packet in _queue.ReadAllAsync(stoppingToken))
         {
             try
@@ -73,13 +73,6 @@ public sealed class Producer : BackgroundService
 
     private static int ResolveWorkerCount()
     {
-        // Config số worker trong .env nếu cần, ở bài toàn tối ưu này thì sẽ lấy max số worker mà CPU mang lại được
-        var configuredValue = Environment.GetEnvironmentVariable("TELEMETRY_PRODUCER_WORKERS");
-        if (int.TryParse(configuredValue, out var configuredCount) && configuredCount > 0)
-        {
-                return configuredCount;
-        }
-        // Lấy số nhân CPU chia 2 để lấy ra số worker. Nhường lại 50% số nhân CPU cho các tác vụ nặng
         return Math.Clamp(Environment.ProcessorCount / 2, 2, 8); //min =2, max =8
     }
 

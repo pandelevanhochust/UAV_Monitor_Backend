@@ -120,8 +120,6 @@ builder.Services.AddSingleton<IConnectionFactory>(_ =>
 });
 
 // ── Background Worker ────────────────────────────────────────────────────────
-// 💡 Mẹo: Khi chạy benchmark cực hạn (16k RPS) trên máy local 1 server,
-// bạn có thể tạm thời comment dòng dưới đây lại để cô lập tầng nhận (Ingestion) sang Kafka trước.
 builder.Services.AddHostedService<Producer>();
 builder.Services.AddHostedService<IngestionWorker>();
 
