@@ -63,7 +63,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 {
     var redisHost = Environment.GetEnvironmentVariable("REDIS_HOST");
     var connStr = !string.IsNullOrEmpty(redisHost)
-        ? $"{redisHost}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false"
+        ? $"{redisHost}:{Environment.GetEnvironmentVariable("REDIS_PORT") ?? "6379"},password={Environment.GetEnvironmentVariable("REDIS_PASSWORD") ?? ""},abortConnect=false,connectRetry=5,connectTimeout=5000"
         : builder.Configuration.GetConnectionString("RedisConnection");
     return ConnectionMultiplexer.Connect(connStr!);
 });

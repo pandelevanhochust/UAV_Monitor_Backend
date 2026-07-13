@@ -1,31 +1,25 @@
-using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
 using Microsoft.AspNetCore.Mvc;
-using RabbitMQ.Client;
-using System.Threading.Channels; 
+using System.Threading.Channels;
 using StackExchange.Redis;
 using UavSystem.IngestionService.WebApi.Pipeline.Models;
-using UavSystem.Shared.Contracts.Events;
 using UavSystem.Shared.Infrastructure.Caching;
 
 namespace UavSystem.IngestionService.WebApi.Controllers;
 
 [ApiController]
 [Route("api/v1/telemetry")]
-public sealed class TelemetryController : ControllerBase, IDisposable
+public sealed class TelemetryController : ControllerBase
 {
     private readonly IProducer<string, string> _kafkaProducer;
     private readonly IDatabase _redis;
     private readonly ILogger<TelemetryController> _logger;
-
-    private const string ExchangeName = "uav.events";
     private readonly Channel<LogPacket> _alertChannel;
 
     public TelemetryController(
         IProducer<string, string> kafkaProducer,
         IConnectionMultiplexer connectionMultiplexer,
-        IConnectionFactory rabbitConnectionFactory,
         ILogger<TelemetryController> logger,
         Channel<LogPacket> alertChannel)
     {
@@ -33,26 +27,6 @@ public sealed class TelemetryController : ControllerBase, IDisposable
         _redis = connectionMultiplexer.GetDatabase();
         _logger = logger;
         _alertChannel = alertChannel;
-    }
-
-    private static IConnection ConnectWithRetry(IConnectionFactory factory, int maxAttempts = 5)
-    {
-        Exception? lastEx = null;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++)
-        {
-            try
-            {
-                return factory.CreateConnection();
-            }
-            catch (Exception ex) when (attempt < maxAttempts)
-            {
-                lastEx = ex;
-                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt)); 
-                Thread.Sleep(delay);
-            }
-        }
-        throw new InvalidOperationException(
-            $"[TelemetryController] Failed to connect to RabbitMQ after {maxAttempts} attempts.", lastEx);
     }
 
     [HttpPost("log")]

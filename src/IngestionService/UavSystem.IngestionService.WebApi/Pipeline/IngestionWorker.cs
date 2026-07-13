@@ -40,7 +40,7 @@ public sealed class IngestionWorker : BackgroundService
         _clickHouseConnection = clickHouseConnection;
         _deviceGrpcClient = deviceGrpcClient;
         _logger = logger;
-    }
+    } 
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -91,8 +91,19 @@ public sealed class IngestionWorker : BackgroundService
 
                 _logger.LogDebug("Đang xử lý song song mẻ đường ống gồm {Count} gói tin", batch.Count);
 
-                var step1Task = ProcessStateDeltasAsync(batch, stoppingToken);
-                var step2Task = UpdateLatestLogsAsync(batch, stoppingToken);
+                var step1Task = ProcessStateDeltasAsync(batch, stoppingToken)
+                    .ContinueWith(t =>
+                    {
+                        if (t.IsFaulted)
+                            _logger.LogError(t.Exception!.InnerException, "[Step1] ProcessStateDeltas thất bại — bỏ qua, tiếp tục pipeline");
+                    }, TaskContinuationOptions.ExecuteSynchronously);
+
+                var step2Task = UpdateLatestLogsAsync(batch, stoppingToken)
+                    .ContinueWith(t =>
+                    {
+                        if (t.IsFaulted)
+                            _logger.LogError(t.Exception!.InnerException, "[Step2] UpdateLatestLogs thất bại — bỏ qua, tiếp tục pipeline");
+                    }, TaskContinuationOptions.ExecuteSynchronously);
 
                 await Task.WhenAll(step1Task, step2Task);
 
