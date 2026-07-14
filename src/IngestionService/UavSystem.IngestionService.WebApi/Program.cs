@@ -43,19 +43,18 @@ var telemetryQueueCapacity = int.TryParse(telemetryQueueCapacityValue, out var p
 builder.Services.AddSingleton(new TelemetryIngestionQueue(telemetryQueueCapacity));
 var kafkaBootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP_SERVERS") ?? "localhost:9092";
 
-// 1. Register Kafka Producer (Fix lỗi CS0103 & Tối ưu Singleton)
+// 1. Register Kafka Producer  - 1 message =  700bytes
 builder.Services.AddSingleton<IProducer<string, string>>(_ =>
 {
     var producerConfig = new ProducerConfig
     {
         BootstrapServers = kafkaBootstrapServers, // Sử dụng biến môi trường linh hoạt
-        QueueBufferingMaxMessages = 2000000,      // Cho phép đệm tới 2 triệu tin nhắn trên RAM
-        LingerMs = 100,                            // Chờ 20ms để gom các request nhỏ thành gói lớn
-        BatchNumMessages = 10000,                 // Gom tối ưu 10k bản tin mỗi gói TCP
+        QueueBufferingMaxMessages = 2000000,      // 2tr messages trên localbuffer == 
+        LingerMs = 100,                            // Chờ 100ms
+        BatchNumMessages = 10000,                 // Gom 10k/ batch 2.5MB
         CompressionType = CompressionType.Lz4     // Nén dữ liệu LZ4 giảm tải băng thông
     };
     
-    // SỬA LỖI: Truyền đúng biến 'producerConfig' thay vì 'config'
     return new ProducerBuilder<string, string>(producerConfig).Build();
 });
 

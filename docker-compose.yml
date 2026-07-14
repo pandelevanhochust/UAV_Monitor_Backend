@@ -177,6 +177,8 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     volumes:
       - kafka-data:/var/lib/kafka/data
@@ -190,7 +192,6 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
-
 
   # ==========================================================================
   # APPLICATION SERVICES (.NET 9)
