@@ -32,8 +32,9 @@ public sealed class Producer : BackgroundService
         // Tạo thành các task chạy loop xử lý song song
         var workers = Enumerable.Range(0, _workerCount)
             .Select(workerId => RunProducerLoopAsync(workerId, stoppingToken));
+        var metricsWorker = LogQueueMetricsAsync(stoppingToken);
         // chờ tất cả worker kết thúc
-        await Task.WhenAll(workers);
+        await Task.WhenAll(workers.Append(metricsWorker));
     }
 
     private async Task RunProducerLoopAsync(int workerId, CancellationToken stoppingToken)
@@ -74,6 +75,32 @@ public sealed class Producer : BackgroundService
     private static int ResolveWorkerCount()
     {
         return Math.Clamp(Environment.ProcessorCount / 2, 2, 8); //min =2, max =8
+    }
+
+    private async Task LogQueueMetricsAsync(CancellationToken stoppingToken)
+    {
+        var previous = _queue.GetSnapshot();
+
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            var current = _queue.GetSnapshot();
+            var enqueuedDelta = current.TotalEnqueued - previous.TotalEnqueued;
+            var dequeuedDelta = current.TotalDequeued - previous.TotalDequeued;
+            var rejectedDelta = current.TotalRejected - previous.TotalRejected;
+
+            _logger.LogInformation(
+                "Telemetry queue depth={Depth} enqueued/s={EnqueuedPerSecond:F0} dequeued/s={DequeuedPerSecond:F0} rejected/s={RejectedPerSecond:F0} total_enqueued={TotalEnqueued} total_dequeued={TotalDequeued} total_rejected={TotalRejected}",
+                current.Depth,
+                enqueuedDelta / 5.0,
+                dequeuedDelta / 5.0,
+                rejectedDelta / 5.0,
+                current.TotalEnqueued,
+                current.TotalDequeued,
+                current.TotalRejected);
+
+            previous = current;
+        }
     }
 
     public override void Dispose()
